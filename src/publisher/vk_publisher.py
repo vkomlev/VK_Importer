@@ -172,18 +172,55 @@ class VKPublisher:
                         
                         # Публикуем на стене группы
                         # owner_id должен быть отрицательным для групп
-                        wall_response = self.vk.wall.post(
-                            owner_id=-abs(self.group_id),
-                            message=video.description if video.description else "",  # Полный текст как сообщение
-                            attachments=attachment,
-                        )
+                        # Пробуем разные варианты параметров
+                        group_owner_id = -abs(self.group_id)
                         
-                        post_id = wall_response.get("post_id")
-                        if post_id:
-                            post_url = f"https://vk.com/wall-{self.group_id}_{post_id}"
-                            logger.info(f"✓ Видео опубликовано на стене сообщества: {post_url}")
-                        else:
-                            logger.warning(f"Видео загружено, но не удалось опубликовать на стене. Ответ: {wall_response}")
+                        # Вариант 1: С from_group=1 (публикация от имени группы)
+                        try:
+                            wall_params = {
+                                "owner_id": group_owner_id,
+                                "message": video.description if video.description else "",
+                                "attachments": attachment,
+                                "from_group": 1,  # Публикация от имени группы
+                            }
+                            logger.debug(f"Попытка публикации на стене с from_group=1, owner_id={group_owner_id}")
+                            wall_response = self.vk.wall.post(**wall_params)
+                            
+                            post_id = wall_response.get("post_id")
+                            if post_id:
+                                post_url = f"https://vk.com/wall{group_owner_id}_{post_id}"
+                                logger.info(f"✓ Видео опубликовано на стене сообщества: {post_url}")
+                            else:
+                                logger.warning(f"Видео загружено, но не удалось опубликовать на стене. Ответ: {wall_response}")
+                        except ApiError as e1:
+                            if e1.code == 15:
+                                # Пробуем без from_group
+                                logger.debug(f"Ошибка 15 с from_group=1, пробуем без from_group")
+                                try:
+                                    wall_params = {
+                                        "owner_id": group_owner_id,
+                                        "message": video.description if video.description else "",
+                                        "attachments": attachment,
+                                    }
+                                    wall_response = self.vk.wall.post(**wall_params)
+                                    
+                                    post_id = wall_response.get("post_id")
+                                    if post_id:
+                                        post_url = f"https://vk.com/wall{group_owner_id}_{post_id}"
+                                        logger.info(f"✓ Видео опубликовано на стене сообщества: {post_url}")
+                                    else:
+                                        logger.warning(f"Видео загружено, но не удалось опубликовать на стене. Ответ: {wall_response}")
+                                except ApiError as e2:
+                                    if e2.code == 15:
+                                        logger.warning(
+                                            f"Ошибка доступа при публикации на стене (код {e2.code}): {e2}. "
+                                            f"Метод wall.post доступен только для Standalone приложений. "
+                                            f"Если ваше приложение Website/iFrame, используйте JavaScript SDK или создайте Standalone приложение."
+                                        )
+                                    else:
+                                        logger.warning(f"Видео загружено, но ошибка при публикации на стене: {e2}")
+                            else:
+                                raise  # Пробрасываем другие ошибки
                     except Exception as e:
                         logger.warning(f"Видео загружено, но ошибка при публикации на стене: {e}")
                         # Не возвращаем None, так как видео уже загружено

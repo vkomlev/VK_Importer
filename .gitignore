@@ -58,3 +58,8 @@ telegram_exports/
 input/
 *.html
 *.json
+
+# Анализ данных
+first_lines_analysis.txt
+title_mapping.csv
+problematic_titles*.csv

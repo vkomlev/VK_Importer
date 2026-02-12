@@ -117,35 +117,38 @@ class JSONParser(BaseParser):
         Returns:
             VideoData или None, если видео не найдено.
         """
-        # Поиск видео в attachments/media
-        media = message.get("media", {})
-        file_path = None
-        
-        # Проверка различных возможных путей к файлу
-        if "file" in media:
-            file_path = self.export_path / "files" / media["file"]
-        elif "path" in media:
-            file_path = self.export_path / media["path"]
-        elif "video" in media:
-            video_info = media["video"]
-            if "file" in video_info:
-                file_path = self.export_path / "files" / video_info["file"]
-        
-        if not file_path or not file_path.exists():
+        # Проверяем наличие файла и его тип
+        file_path_str = message.get("file")
+        if not file_path_str:
             return None
         
-        # Проверка расширения файла
-        if file_path.suffix.lower() not in [".mp4", ".webm"]:
+        # Проверяем mime_type для фильтрации видео
+        mime_type = message.get("mime_type", "")
+        if mime_type and not mime_type.startswith("video/"):
+            return None
+        
+        # Проверяем расширение файла
+        file_name = message.get("file_name", file_path_str)
+        if not any(file_name.lower().endswith(ext) for ext in [".mp4", ".webm"]):
+            return None
+        
+        # Разрешаем путь к файлу
+        # file может быть в формате "files/4708k.webm"
+        if file_path_str.startswith("files/"):
+            file_path_str = file_path_str[len("files/"):]
+        
+        file_path = self.export_path / "files" / file_path_str
+        
+        # Если файл не найден по полному пути, пробуем найти по имени
+        if not file_path.exists():
+            file_path = self.export_path / "files" / file_name
+        
+        if not file_path.exists():
+            logger.debug(f"Видеофайл не найден: {file_path}")
             return None
         
         # Извлечение текста сообщения
-        description = message.get("text", "")
-        if isinstance(description, list):
-            # Текст может быть массивом объектов с форматированием
-            description = " ".join(
-                item.get("text", "") if isinstance(item, dict) else str(item)
-                for item in description
-            )
+        description = self._extract_text_from_message(message)
         
         # Извлечение даты
         date = None
@@ -159,11 +162,45 @@ class JSONParser(BaseParser):
             date=date
         )
     
+    def _extract_text_from_message(self, message: Dict[str, Any]) -> str:
+        """Извлечь текст из сообщения.
+        
+        Текст может быть строкой или массивом, содержащим строки и объекты
+        с типами (например, text_link).
+        
+        Args:
+            message: Словарь с данными сообщения.
+            
+        Returns:
+            Извлеченный текст сообщения.
+        """
+        text = message.get("text", "")
+        
+        if isinstance(text, str):
+            return text
+        
+        if isinstance(text, list):
+            text_parts = []
+            for item in text:
+                if isinstance(item, str):
+                    text_parts.append(item)
+                elif isinstance(item, dict):
+                    # Объекты могут быть разных типов: plain, text_link и т.д.
+                    item_text = item.get("text", "")
+                    if item_text:
+                        text_parts.append(item_text)
+            return " ".join(text_parts)
+        
+        return str(text) if text else ""
+    
     def _parse_date(self, date_value: Any) -> Optional[datetime]:
         """Парсить дату из значения.
         
+        Формат даты из Telegram JSON: "2025-04-01T21:58:59" (ISO format)
+        Также может быть unix timestamp в поле date_unixtime.
+        
         Args:
-            date_value: Значение даты (может быть строкой, timestamp и т.д.).
+            date_value: Значение даты (может быть строкой ISO формата).
             
         Returns:
             Объект datetime или None при ошибке парсинга.
@@ -179,6 +216,7 @@ class JSONParser(BaseParser):
         if isinstance(date_value, str):
             try:
                 from dateutil import parser
+                # Парсим ISO формат даты
                 return parser.parse(date_value)
             except Exception as e:
                 logger.warning(f"Не удалось распарсить дату '{date_value}': {e}")

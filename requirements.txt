@@ -3,7 +3,6 @@ vk-api==11.9.9
 
 # HTML parsing
 beautifulsoup4==4.12.2
-lxml==4.9.3
 
 # JSON parsing (встроен в Python, но может понадобиться для валидации)
 jsonschema==4.20.0

@@ -55,5 +55,6 @@ Thumbs.db
 
 # Telegram exports (примеры данных)
 telegram_exports/
+input/
 *.html
 *.json

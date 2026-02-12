@@ -18,7 +18,7 @@ class HTMLParser(BaseParser):
     """Парсер для HTML формата экспорта Telegram.
     
     Обрабатывает HTML файлы с сообщениями и ищет прикрепленные
-    видеофайлы в папке files/.
+    видеофайлы в папке video_files/.
     """
     
     def detect_format(self) -> bool:
@@ -42,85 +42,95 @@ class HTMLParser(BaseParser):
             return []
         
         videos = []
-        files_dir = self.export_path / "files"
+        video_files_dir = self.export_path / "video_files"
         
         for html_file in html_files:
             logger.info(f"Парсинг файла: {html_file.name}")
-            videos.extend(self._parse_html_file(html_file, files_dir))
+            videos.extend(self._parse_html_file(html_file, video_files_dir))
         
         logger.info(f"Найдено видео: {len(videos)}")
         return videos
     
     def _parse_html_file(
-        self, html_file: Path, files_dir: Path
+        self, html_file: Path, video_files_dir: Path
     ) -> List[VideoData]:
         """Парсить один HTML файл.
         
         Args:
             html_file: Путь к HTML файлу.
-            files_dir: Путь к папке с файлами.
+            video_files_dir: Путь к папке с видеофайлами.
             
         Returns:
             Список VideoData из этого файла.
         """
         with open(html_file, "r", encoding="utf-8") as f:
-            soup = BeautifulSoup(f.read(), "lxml")
+            soup = BeautifulSoup(f.read(), "html.parser")
         
         videos = []
-        messages = soup.find_all("div", class_="message")
+        # Ищем только обычные сообщения (не service)
+        messages = soup.find_all("div", class_=re.compile(r"message default"))
         
         for message in messages:
-            video_data = self._extract_video_from_message(message, files_dir)
+            video_data = self._extract_video_from_message(message, video_files_dir)
             if video_data:
                 videos.append(video_data)
         
         return videos
     
     def _extract_video_from_message(
-        self, message_element, files_dir: Path
+        self, message_element, video_files_dir: Path
     ) -> Optional[VideoData]:
         """Извлечь информацию о видео из элемента сообщения.
         
         Args:
             message_element: BeautifulSoup элемент сообщения.
-            files_dir: Путь к папке с файлами.
+            video_files_dir: Путь к папке с видеофайлами.
             
         Returns:
             VideoData или None, если видео не найдено.
         """
-        # Поиск видеофайлов в сообщении
-        video_links = message_element.find_all("a", href=re.compile(r"\.(mp4|webm)$", re.I))
+        # Поиск видеофайлов в сообщении (класс video_file_wrap)
+        video_wrap = message_element.find("a", class_="video_file_wrap")
         
-        if not video_links:
+        if not video_wrap:
+            return None
+        
+        # Получаем путь к видео из атрибута href
+        video_href = video_wrap.get("href")
+        if not video_href:
+            return None
+        
+        # Разрешаем путь к видеофайлу
+        video_path = self._resolve_video_path(video_href, video_files_dir)
+        if not video_path or not video_path.exists():
             return None
         
         # Извлечение текста сообщения
         text_elem = message_element.find("div", class_="text")
-        description = text_elem.get_text(strip=True) if text_elem else ""
+        description = text_elem.get_text(separator=" ", strip=True) if text_elem else ""
         
-        # Извлечение даты
-        date_elem = message_element.find("div", class_="date")
-        date = self._parse_date(date_elem.get_text(strip=True)) if date_elem else None
+        # Извлечение даты из атрибута title элемента date
+        # Ищем элемент с классом "date" и атрибутом "details"
+        date_elem = message_element.find("div", class_=re.compile(r"date.*details"))
+        date = None
+        if date_elem:
+            date_title = date_elem.get("title")
+            if date_title:
+                date = self._parse_date(date_title)
         
-        # Обработка всех найденных видео
-        for video_link in video_links:
-            video_path = self._resolve_video_path(video_link.get("href"), files_dir)
-            if video_path and video_path.exists():
-                return VideoData(
-                    file_path=video_path,
-                    title="",  # Будет сгенерирован позже
-                    description=description,
-                    date=date
-                )
-        
-        return None
+        return VideoData(
+            file_path=video_path,
+            title="",  # Будет сгенерирован позже
+            description=description,
+            date=date
+        )
     
-    def _resolve_video_path(self, href: str, files_dir: Path) -> Optional[Path]:
+    def _resolve_video_path(self, href: str, video_files_dir: Path) -> Optional[Path]:
         """Разрешить путь к видеофайлу.
         
         Args:
-            href: Ссылка из HTML (может быть относительной или абсолютной).
-            files_dir: Базовая папка с файлами.
+            href: Ссылка из HTML (например "video_files/ЕГЭ_Задание1.mp4").
+            video_files_dir: Базовая папка с видеофайлами.
             
         Returns:
             Полный путь к файлу или None, если не найден.
@@ -131,14 +141,18 @@ class HTMLParser(BaseParser):
         # Убрать начальный слеш и ../ если есть
         href = href.lstrip("/").replace("../", "")
         
-        # Попробовать найти файл в files_dir
-        video_path = files_dir / href
+        # Если href начинается с video_files/, убираем этот префикс
+        if href.startswith("video_files/"):
+            href = href[len("video_files/"):]
+        
+        # Попробовать найти файл в video_files_dir
+        video_path = video_files_dir / href
         if video_path.exists():
             return video_path
         
         # Попробовать найти по имени файла
         filename = Path(href).name
-        video_path = files_dir / filename
+        video_path = video_files_dir / filename
         if video_path.exists():
             return video_path
         
@@ -147,17 +161,17 @@ class HTMLParser(BaseParser):
     def _parse_date(self, date_str: str) -> Optional[datetime]:
         """Парсить дату из строки.
         
+        Формат даты из Telegram HTML: "08.02.2023 13:47:10 UTC+05:00"
+        
         Args:
-            date_str: Строка с датой из HTML.
+            date_str: Строка с датой из атрибута title элемента date.
             
         Returns:
             Объект datetime или None при ошибке парсинга.
         """
-        # TODO: Реализовать парсинг даты из формата Telegram
-        # Формат может быть разным, нужно проанализировать примеры
         try:
-            # Временная заглушка
             from dateutil import parser
+            # Парсим дату, dateutil умеет обрабатывать формат с UTC
             return parser.parse(date_str)
         except Exception as e:
             logger.warning(f"Не удалось распарсить дату '{date_str}': {e}")

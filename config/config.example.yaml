@@ -1,0 +1,34 @@
+# Конфигурация VK Video Publisher
+
+# VK API настройки
+vk:
+  access_token: "YOUR_VK_ACCESS_TOKEN_HERE"
+  group_id: null  # ID группы для публикации (null для публикации от имени пользователя)
+
+# Настройки генератора заголовков
+title_generator:
+  type: "composite"  # simple, date, description, composite
+  date_format: "%Y-%m-%d"  # Формат даты для date генератора
+  max_length: 100  # Максимальная длина для description генератора
+  separator: " | "  # Разделитель для composite генератора
+  generators:  # Для composite генератора
+    - "date"
+    - "description"
+
+# Пути к экспортам Telegram
+exports:
+  - path: "telegram_exports/channel1"
+    format: "auto"  # auto, html, json
+  - path: "telegram_exports/channel2"
+    format: "html"
+
+# Настройки публикации
+publishing:
+  dry_run: false  # Режим тестирования без реальной публикации
+  skip_existing: true  # Пропускать уже опубликованные видео
+  max_retries: 3  # Максимальное количество попыток при ошибке
+
+# Логирование
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "logs/publisher.log"  # Путь к файлу логов (null для вывода только в консоль)

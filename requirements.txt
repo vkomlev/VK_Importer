@@ -1,0 +1,24 @@
+# VK API
+vk-api==11.9.9
+
+# HTML parsing
+beautifulsoup4==4.12.2
+lxml==4.9.3
+
+# JSON parsing (встроен в Python, но может понадобиться для валидации)
+jsonschema==4.20.0
+
+# Configuration
+pyyaml==6.0.1
+
+# Date parsing
+python-dateutil==2.8.2
+
+# CLI
+click==8.1.7
+
+# Logging improvements
+colorlog==6.8.0
+
+# Progress bars
+tqdm==4.66.1

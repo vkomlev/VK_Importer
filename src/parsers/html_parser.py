@@ -42,23 +42,19 @@ class HTMLParser(BaseParser):
             return []
         
         videos = []
-        video_files_dir = self.export_path / "video_files"
         
         for html_file in html_files:
             logger.info(f"Парсинг файла: {html_file.name}")
-            videos.extend(self._parse_html_file(html_file, video_files_dir))
+            videos.extend(self._parse_html_file(html_file))
         
         logger.info(f"Найдено видео: {len(videos)}")
         return videos
     
-    def _parse_html_file(
-        self, html_file: Path, video_files_dir: Path
-    ) -> List[VideoData]:
+    def _parse_html_file(self, html_file: Path) -> List[VideoData]:
         """Парсить один HTML файл.
         
         Args:
             html_file: Путь к HTML файлу.
-            video_files_dir: Путь к папке с видеофайлами.
             
         Returns:
             Список VideoData из этого файла.
@@ -71,26 +67,35 @@ class HTMLParser(BaseParser):
         messages = soup.find_all("div", class_=re.compile(r"message default"))
         
         for message in messages:
-            video_data = self._extract_video_from_message(message, video_files_dir)
+            video_data = self._extract_video_from_message(message)
             if video_data:
                 videos.append(video_data)
         
         return videos
     
     def _extract_video_from_message(
-        self, message_element, video_files_dir: Path
+        self, message_element
     ) -> Optional[VideoData]:
         """Извлечь информацию о видео из элемента сообщения.
         
         Args:
             message_element: BeautifulSoup элемент сообщения.
-            video_files_dir: Путь к папке с видеофайлами.
             
         Returns:
             VideoData или None, если видео не найдено.
         """
-        # Поиск видеофайлов в сообщении (класс video_file_wrap)
+        # Поиск видеофайлов в сообщении
+        # MP4 файлы обычно в элементах с классом video_file_wrap
+        # WEBM файлы могут быть в элементах с классом media_file
         video_wrap = message_element.find("a", class_="video_file_wrap")
+        
+        if not video_wrap:
+            # Пробуем найти WEBM файлы в media_file элементах
+            media_link = message_element.find("a", class_="media_file")
+            if media_link:
+                href = media_link.get("href", "")
+                if href and (href.endswith(".webm") or href.endswith(".mp4")):
+                    video_wrap = media_link
         
         if not video_wrap:
             return None
@@ -100,8 +105,12 @@ class HTMLParser(BaseParser):
         if not video_href:
             return None
         
+        # Определяем расширение файла для выбора правильной папки
+        # MP4 файлы в video_files/, WEBM в files/
+        file_ext = Path(video_href).suffix.lower()
+        
         # Разрешаем путь к видеофайлу
-        video_path = self._resolve_video_path(video_href, video_files_dir)
+        video_path = self._resolve_video_path(video_href, file_ext)
         if not video_path or not video_path.exists():
             return None
         
@@ -125,12 +134,14 @@ class HTMLParser(BaseParser):
             date=date
         )
     
-    def _resolve_video_path(self, href: str, video_files_dir: Path) -> Optional[Path]:
+    def _resolve_video_path(self, href: str, file_ext: str) -> Optional[Path]:
         """Разрешить путь к видеофайлу.
+        
+        MP4 файлы ищутся в папке video_files/, WEBM - в папке files/.
         
         Args:
             href: Ссылка из HTML (например "video_files/ЕГЭ_Задание1.mp4").
-            video_files_dir: Базовая папка с видеофайлами.
+            file_ext: Расширение файла (.mp4 или .webm).
             
         Returns:
             Полный путь к файлу или None, если не найден.
@@ -141,18 +152,35 @@ class HTMLParser(BaseParser):
         # Убрать начальный слеш и ../ если есть
         href = href.lstrip("/").replace("../", "")
         
-        # Если href начинается с video_files/, убираем этот префикс
+        # Определяем целевую папку в зависимости от расширения
+        if file_ext == ".mp4":
+            target_dir = self.export_path / "video_files"
+        elif file_ext == ".webm":
+            target_dir = self.export_path / "files"
+        else:
+            # Для других форматов пробуем video_files (по умолчанию для HTML)
+            target_dir = self.export_path / "video_files"
+        
+        # Убрать префикс папки из href, если есть
         if href.startswith("video_files/"):
             href = href[len("video_files/"):]
+        elif href.startswith("files/"):
+            href = href[len("files/"):]
         
-        # Попробовать найти файл в video_files_dir
-        video_path = video_files_dir / href
+        # Попробовать найти файл в целевой папке
+        video_path = target_dir / href
         if video_path.exists():
             return video_path
         
         # Попробовать найти по имени файла
         filename = Path(href).name
-        video_path = video_files_dir / filename
+        video_path = target_dir / filename
+        if video_path.exists():
+            return video_path
+        
+        # Если не найден, пробуем альтернативную папку (на случай ошибки в определении)
+        alternative_dir = self.export_path / "files" if file_ext == ".mp4" else self.export_path / "video_files"
+        video_path = alternative_dir / filename
         if video_path.exists():
             return video_path
         

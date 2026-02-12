@@ -133,15 +133,35 @@ class JSONParser(BaseParser):
             return None
         
         # Разрешаем путь к файлу
-        # file может быть в формате "files/4708k.webm"
+        # MP4 файлы находятся в папке video_files, WEBM - в папке files
+        file_ext = Path(file_name).suffix.lower()
+        
+        # Определяем папку в зависимости от расширения
+        if file_ext == ".mp4":
+            target_dir = self.export_path / "video_files"
+        elif file_ext == ".webm":
+            target_dir = self.export_path / "files"
+        else:
+            # Для других форматов пробуем обе папки
+            target_dir = self.export_path / "files"
+        
+        # Убираем префикс папки из пути, если есть
         if file_path_str.startswith("files/"):
             file_path_str = file_path_str[len("files/"):]
+        elif file_path_str.startswith("video_files/"):
+            file_path_str = file_path_str[len("video_files/"):]
         
-        file_path = self.export_path / "files" / file_path_str
+        # Пробуем найти файл в целевой папке
+        file_path = target_dir / file_path_str
         
         # Если файл не найден по полному пути, пробуем найти по имени
         if not file_path.exists():
-            file_path = self.export_path / "files" / file_name
+            file_path = target_dir / file_name
+        
+        # Если все еще не найден, пробуем другую папку (на случай ошибки в определении)
+        if not file_path.exists():
+            alternative_dir = self.export_path / "video_files" if file_ext == ".webm" else self.export_path / "files"
+            file_path = alternative_dir / file_name
         
         if not file_path.exists():
             logger.debug(f"Видеофайл не найден: {file_path}")

@@ -63,3 +63,7 @@ input/
 first_lines_analysis.txt
 title_mapping.csv
 problematic_titles*.csv
+
+# База данных видео
+videos.db
+videos.db-journal

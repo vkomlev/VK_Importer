@@ -15,12 +15,14 @@ class VideoData:
         title: Заголовок видео (будет сгенерирован).
         description: Описание видео (текст сообщения).
         date: Дата видео.
+        channel: Название канала (опционально).
     """
     
     file_path: Path
     title: str
     description: str
     date: Optional[datetime] = None
+    channel: Optional[str] = None
     
     def __post_init__(self):
         """Валидация данных после инициализации."""

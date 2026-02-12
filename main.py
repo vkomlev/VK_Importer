@@ -2,6 +2,7 @@
 
 import sys
 import io
+import time
 from pathlib import Path
 import logging
 from typing import Optional
@@ -382,6 +383,11 @@ def _upload_batch(records: list[VideoRecord], storage: VideoStorage, delay: floa
             storage.mark_uploaded(record.id, "", error="Ошибка загрузки")
             failed += 1
             click.echo(f"✗ Ошибка загрузки")
+        
+        # Задержка между загрузками (кроме последнего видео)
+        if idx < len(records):
+            click.echo(f"Ожидание {delay} сек перед следующей загрузкой...")
+            time.sleep(delay)
     
     click.echo("\n" + "=" * 80)
     click.echo("РЕЗУЛЬТАТЫ")

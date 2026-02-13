@@ -100,6 +100,19 @@ def get_export_paths(source_filter: Optional[str] = None) -> list[Path]:
                     export_paths.append(export_folder)
         return export_paths
     
+    elif source_filter.lower() == "oge":
+        # Все экспорты ОГЭ
+        oge_dir = input_dir / "Экспорт ОГЭ"
+        if not oge_dir.exists():
+            oge_dir = input_dir / "ОГЭ по информатике"
+        export_paths = []
+        if oge_dir.exists():
+            export_paths.append(oge_dir)
+            for export_folder in oge_dir.iterdir():
+                if export_folder.is_dir():
+                    export_paths.append(export_folder)
+        return export_paths
+    
     else:
         # Конкретная папка
         export_path = Path(source_filter)
@@ -120,7 +133,7 @@ def cli():
 @click.option(
     "--source", "-s",
     default="all",
-    help="Источник видео: 'all', 'all_channels', 'ege', 'python' или путь к папке"
+    help="Источник видео: 'all', 'all_channels', 'ege', 'python', 'oge' или путь к папке"
 )
 def scan(source: str):
     """Сканировать экспорты и добавить видео в хранилище."""

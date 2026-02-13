@@ -17,6 +17,11 @@ from .python_generators import (
     PythonTaskTitleGenerator,
     PythonAutoTitleGenerator,
 )
+from .oge_generators import (
+    OGETopicTitleGenerator,
+    OGETaskTitleGenerator,
+    OGEAutoTitleGenerator,
+)
 
 __all__ = [
     "BaseTitleGenerator",
@@ -30,4 +35,7 @@ __all__ = [
     "PythonTopicTitleGenerator",
     "PythonTaskTitleGenerator",
     "PythonAutoTitleGenerator",
+    "OGETopicTitleGenerator",
+    "OGETaskTitleGenerator",
+    "OGEAutoTitleGenerator",
 ]

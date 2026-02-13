@@ -65,6 +65,8 @@ class VideoScanner:
                         channel = "ЕГЭ"
                     elif "Python" in str(export_path) or "Python" in str(export_path.parent):
                         channel = "Python"
+                    elif "ОГЭ" in str(export_path) or "ОГЭ" in str(export_path.parent) or "оге" in str(export_path).lower():
+                        channel = "ОГЭ"
                     else:
                         channel = None
                     
@@ -79,6 +81,7 @@ class VideoScanner:
         # Генерируем заголовки
         ege_generator = TitleGeneratorFactory.create("ege_auto")
         python_generator = TitleGeneratorFactory.create("python_auto")
+        oge_generator = TitleGeneratorFactory.create("oge_auto")
         
         for video_data, source_folder in all_videos:
             # Генерируем заголовок
@@ -86,6 +89,8 @@ class VideoScanner:
                 generator = ege_generator
             elif video_data.channel == "Python":
                 generator = python_generator
+            elif video_data.channel == "ОГЭ":
+                generator = oge_generator
             else:
                 generator = TitleGeneratorFactory.create("simple")
             

@@ -23,6 +23,9 @@ python main.py scan --source ege
 # Сканировать только экспорты Python
 python main.py scan --source python
 
+# Сканировать только экспорты ОГЭ
+python main.py scan --source oge
+
 # Сканировать конкретную папку
 python main.py scan --source "input/Экпорты ЕГЭ/Апрель 25"
 ```
@@ -126,6 +129,7 @@ python main.py upload-next --delay 10 --max-retries 5
 - `all_channels` - все экспорты из всех каналов (все папки в `input/`)
 - `ege` - все экспорты ЕГЭ
 - `python` - все экспорты Python
+- `oge` - все экспорты ОГЭ по информатике
 - путь к папке - конкретная папка экспорта
 
 ## Структура базы данных

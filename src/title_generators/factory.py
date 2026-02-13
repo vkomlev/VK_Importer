@@ -19,6 +19,11 @@ from .python_generators import (
     PythonTaskTitleGenerator,
     PythonAutoTitleGenerator,
 )
+from .oge_generators import (
+    OGETopicTitleGenerator,
+    OGETaskTitleGenerator,
+    OGEAutoTitleGenerator,
+)
 
 
 class TitleGeneratorFactory:
@@ -40,6 +45,10 @@ class TitleGeneratorFactory:
         "python_topic": PythonTopicTitleGenerator,
         "python_task": PythonTaskTitleGenerator,
         "python_auto": PythonAutoTitleGenerator,
+        # Генераторы для ОГЭ
+        "oge_topic": OGETopicTitleGenerator,
+        "oge_task": OGETaskTitleGenerator,
+        "oge_auto": OGEAutoTitleGenerator,
     }
     
     @classmethod

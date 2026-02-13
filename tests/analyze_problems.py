@@ -3,8 +3,8 @@
 import csv
 from pathlib import Path
 
-# Читаем файл (из корня проекта)
-mapping_file = Path(__file__).parent.parent / "title_mapping.csv"
+# Читаем файл: tests/title_mapping.csv
+mapping_file = Path(__file__).parent / "title_mapping.csv"
 with open(mapping_file, "r", encoding="utf-8-sig") as f:
     reader = csv.reader(f, delimiter=";")
     rows = list(reader)

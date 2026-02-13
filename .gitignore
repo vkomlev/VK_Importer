@@ -67,3 +67,7 @@ problematic_titles*.csv
 # База данных видео
 videos.db
 videos.db-journal
+
+# Excel экспорты
+videos_export_*.xlsx
+videos_map.db

@@ -23,14 +23,15 @@ from src.publisher.vk_publisher import VKPublisher, VKPublisherError
 from src.utils.env_utils import get_env_var
 from src.models.video import VideoData
 
-# Настройка логирования
+# Настройка логирования (файл в папке logs, папка в .gitignore)
+Path("logs").mkdir(exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('publisher.log', encoding='utf-8')
-    ]
+        logging.FileHandler("logs/publisher.log", encoding="utf-8"),
+    ],
 )
 logger = logging.getLogger(__name__)
 

@@ -6,6 +6,7 @@ import logging
 
 from ..parsers.html_parser import HTMLParser
 from ..parsers.json_parser import JSONParser
+from ..parsers.custom_export_parser import CustomExportParser
 from ..title_generators.factory import TitleGeneratorFactory
 from ..models.video import VideoData
 from .database import VideoStorage, VideoRecord
@@ -47,10 +48,12 @@ class VideoScanner:
                 logger.warning(f"Путь не существует: {export_path}")
                 continue
             
-            # Определяем формат экспорта
+            # Определяем формат экспорта (кастомный export.json — до общего JSON)
             parser = None
             if HTMLParser(export_path).detect_format():
                 parser = HTMLParser(export_path)
+            elif CustomExportParser(export_path).detect_format():
+                parser = CustomExportParser(export_path)
             elif JSONParser(export_path).detect_format():
                 parser = JSONParser(export_path)
             else:
@@ -60,16 +63,8 @@ class VideoScanner:
             if parser:
                 try:
                     videos = parser.parse()
-                    # Определяем канал по пути
-                    if "ЕГЭ" in str(export_path) or "ЕГЭ" in str(export_path.parent):
-                        channel = "ЕГЭ"
-                    elif "Python" in str(export_path) or "Python" in str(export_path.parent):
-                        channel = "Python"
-                    elif "ОГЭ" in str(export_path) or "ОГЭ" in str(export_path.parent) or "оге" in str(export_path).lower():
-                        channel = "ОГЭ"
-                    else:
-                        channel = None
-                    
+                    # Тип курса из маппинга папка -> курс в БД
+                    channel = self.storage.get_course_for_folder(str(export_path))
                     for video in videos:
                         video.channel = channel
                         all_videos.append((video, export_path))
@@ -91,6 +86,8 @@ class VideoScanner:
                 generator = python_generator
             elif video_data.channel == "ОГЭ":
                 generator = oge_generator
+            elif video_data.channel == "Алгоритмы":
+                generator = TitleGeneratorFactory.create("algorithms_auto")
             else:
                 generator = TitleGeneratorFactory.create("simple")
             
@@ -106,15 +103,16 @@ class VideoScanner:
                 logger.warning(f"Не удалось вычислить хеш для {video_data.file_path}: {e}")
                 file_hash = None
             
-            # Проверяем на дубликаты
+            # Проверяем на дубликаты (но всё равно вызываем add_video для обновления заголовка/описания)
+            is_duplicate = False
             if skip_duplicates and file_hash:
                 existing = self.storage.find_by_hash(file_hash)
                 if existing:
-                    logger.debug(f"Дубликат найден: {video_data.file_path} (существующий: {existing.file_path})")
+                    logger.debug(f"Дубликат по хешу: {video_data.file_path}")
                     stats["duplicates"] += 1
-                    continue
-            
-            # Создаем запись
+                    is_duplicate = True
+
+            # Создаем запись (для дубликатов add_video сделает UPDATE — обновятся title, description, channel)
             record = VideoRecord(
                 file_path=str(video_data.file_path),
                 file_hash=file_hash,

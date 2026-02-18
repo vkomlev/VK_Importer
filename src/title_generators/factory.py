@@ -24,6 +24,7 @@ from .oge_generators import (
     OGETaskTitleGenerator,
     OGEAutoTitleGenerator,
 )
+from .algorithms_generators import AlgorithmsAutoTitleGenerator
 
 
 class TitleGeneratorFactory:
@@ -49,6 +50,7 @@ class TitleGeneratorFactory:
         "oge_topic": OGETopicTitleGenerator,
         "oge_task": OGETaskTitleGenerator,
         "oge_auto": OGEAutoTitleGenerator,
+        "algorithms_auto": AlgorithmsAutoTitleGenerator,
     }
     
     @classmethod

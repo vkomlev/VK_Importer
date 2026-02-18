@@ -82,9 +82,51 @@ class VideoStorage:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_channel ON videos(channel)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_source_folder ON videos(source_folder)")
         
+        # Таблица маппинга: папка -> тип курса (Python, ЕГЭ, ОГЭ)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS folder_course_mapping (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                folder_path TEXT NOT NULL UNIQUE,
+                course_type TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_folder_mapping_path ON folder_course_mapping(folder_path)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_folder_mapping_course ON folder_course_mapping(course_type)")
+        
         conn.commit()
         conn.close()
+        self._ensure_default_folder_mappings()
         logger.info(f"База данных инициализирована: {self.db_path}")
+    
+    def _ensure_default_folder_mappings(self) -> None:
+        """Заполнить маппинг папок значениями по умолчанию, если таблица пуста."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM folder_course_mapping")
+        if cursor.fetchone()[0] == 0:
+            defaults = [
+                ("input/Экпорты ЕГЭ", "ЕГЭ"),
+                ("input/Экспорт Python", "Python"),
+                ("input/Экспорт ОГЭ", "ОГЭ"),
+                ("input/ОГЭ по информатике", "ОГЭ"),
+            ]
+            for folder_path, course_type in defaults:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO folder_course_mapping (folder_path, course_type) VALUES (?, ?)",
+                    (folder_path, course_type),
+                )
+            logger.info("Добавлены маппинги папок по умолчанию")
+        optional = [
+            ("d:/Work/TG_Parser/out/AlgorithmPythonStruct", "Алгоритмы"),
+        ]
+        for folder_path, course_type in optional:
+            cursor.execute(
+                "INSERT OR IGNORE INTO folder_course_mapping (folder_path, course_type) VALUES (?, ?)",
+                (folder_path, course_type),
+            )
+        conn.commit()
+        conn.close()
     
     def add_video(self, record: VideoRecord) -> int:
         """Добавить видео в хранилище.
@@ -375,6 +417,96 @@ class VideoStorage:
             "channels": channels,
             "source_folders": folders,
         }
+    
+    # --- Маппинг папка -> тип курса ---
+    
+    VALID_COURSE_TYPES = ("Python", "ЕГЭ", "ОГЭ", "Алгоритмы")
+    
+    def set_folder_course(self, folder_path: str, course_type: str) -> None:
+        """Установить тип курса для папки.
+        
+        Args:
+            folder_path: Путь к папке (нормализованный, например input/Экспорты ЕГЭ).
+            course_type: Тип курса: Python, ЕГЭ, ОГЭ.
+        """
+        if course_type not in self.VALID_COURSE_TYPES:
+            raise ValueError(f"Тип курса должен быть один из: {self.VALID_COURSE_TYPES}")
+        folder_path = str(Path(folder_path)).replace("\\", "/")
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO folder_course_mapping (folder_path, course_type)
+            VALUES (?, ?)
+            ON CONFLICT(folder_path) DO UPDATE SET course_type = excluded.course_type
+            """,
+            (folder_path, course_type),
+        )
+        conn.commit()
+        conn.close()
+        logger.debug(f"Маппинг: {folder_path} -> {course_type}")
+    
+    def get_course_for_folder(self, folder_path: str) -> Optional[str]:
+        """Получить тип курса для папки.
+        
+        Ищет запись, где folder_path является префиксом переданного пути
+        (или совпадает). Если несколько подходят — возвращается наиболее
+        длинное совпадение.
+        
+        Args:
+            folder_path: Путь к папке экспорта.
+            
+        Returns:
+            Тип курса (Python, ЕГЭ, ОГЭ) или None.
+        """
+        folder_path = str(Path(folder_path)).replace("\\", "/")
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT folder_path, course_type FROM folder_course_mapping ORDER BY LENGTH(folder_path) DESC"
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        norm = folder_path
+        for stored_path, course_type in rows:
+            s = stored_path.replace("\\", "/")
+            if norm == s:
+                return course_type
+            if len(norm) > len(s) and norm.startswith(s):
+                # Папка/подпапка (path/...) или каталог выгрузки TG Parser (path__YYYY-MM-DD_HH-mm)
+                if norm[len(s)] in "/_":
+                    return course_type
+        return None
+    
+    def list_folder_mappings(self) -> List[tuple]:
+        """Список всех маппингов папка -> тип курса.
+        
+        Returns:
+            Список пар (folder_path, course_type).
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT folder_path, course_type FROM folder_course_mapping ORDER BY folder_path"
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return rows
+    
+    def delete_folder_mapping(self, folder_path: str) -> bool:
+        """Удалить маппинг для папки.
+        
+        Returns:
+            True если запись была удалена.
+        """
+        folder_path = str(Path(folder_path)).replace("\\", "/")
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM folder_course_mapping WHERE folder_path = ?", (folder_path,))
+        deleted = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return deleted
     
     def _row_to_record(self, row: sqlite3.Row) -> VideoRecord:
         """Преобразовать строку БД в VideoRecord."""

@@ -129,6 +129,45 @@ def cli():
     pass
 
 
+@cli.group()
+def folders():
+    """Маппинг папок на тип курса (Python, ЕГЭ, ОГЭ)."""
+    pass
+
+
+@folders.command("list")
+def folders_list():
+    """Показать все папки и их тип курса."""
+    storage = get_storage()
+    rows = storage.list_folder_mappings()
+    if not rows:
+        click.echo("Маппинг пуст.")
+        return
+    for folder_path, course_type in rows:
+        click.echo(f"  {folder_path}  →  {course_type}")
+
+
+@folders.command("set")
+@click.argument("folder_path", type=click.Path(exists=False))
+@click.argument("course_type", type=click.Choice(["Python", "ЕГЭ", "ОГЭ", "Алгоритмы"]))
+def folders_set(folder_path: str, course_type: str):
+    """Установить тип курса для папки."""
+    storage = get_storage()
+    storage.set_folder_course(folder_path, course_type)
+    click.echo(f"Установлено: {folder_path}  →  {course_type}")
+
+
+@folders.command("remove")
+@click.argument("folder_path", type=click.Path(exists=False))
+def folders_remove(folder_path: str):
+    """Удалить маппинг для папки."""
+    storage = get_storage()
+    if storage.delete_folder_mapping(folder_path):
+        click.echo(f"Удалён маппинг для: {folder_path}")
+    else:
+        click.echo(f"Маппинг для папки не найден: {folder_path}", err=True)
+
+
 @cli.command()
 @click.option(
     "--source", "-s",

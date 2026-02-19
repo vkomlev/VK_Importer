@@ -9,21 +9,40 @@ from ..models.video import VideoData
 
 class SimpleTitleGenerator(BaseTitleGenerator):
     """Простой генератор заголовков на основе имени файла."""
-    
+
     def generate(self, video: VideoData) -> str:
-        """Сгенерировать заголовок из имени файла.
-        
-        Args:
-            video: Данные видео.
-            
-        Returns:
-            Заголовок на основе имени файла без расширения.
-        """
+        """Сгенерировать заголовок из имени файла."""
         return video.file_path.stem
-    
+
     def get_name(self) -> str:
-        """Получить имя генератора."""
         return "simple"
+
+
+class CoursePrefixTitleGenerator(BaseTitleGenerator):
+    """Генератор «префикс курса + первая строка описания (или stem)». Для Excel, Аналитика, Комлев."""
+
+    def __init__(self, prefix: str, max_length: int = 90):
+        self.prefix = prefix.strip()
+        if not self.prefix.endswith("."):
+            self.prefix += ". "
+        else:
+            self.prefix += " "
+        self.max_length = max_length
+
+    def generate(self, video: VideoData) -> str:
+        desc = (video.description or "").strip()
+        first_line = desc.split("\n")[0].strip() if desc else ""
+        if first_line:
+            if len(first_line) > self.max_length - len(self.prefix):
+                first_line = first_line[: self.max_length - len(self.prefix) - 3].rsplit(" ", 1)[0] + "..."
+            return self.prefix + first_line
+        stem = video.file_path.stem.replace("_", " ")
+        if len(stem) > self.max_length - len(self.prefix):
+            stem = stem[: self.max_length - len(self.prefix) - 3].rsplit(" ", 1)[0] + "..."
+        return self.prefix + stem
+
+    def get_name(self) -> str:
+        return "course_prefix"
 
 
 class DateTitleGenerator(BaseTitleGenerator):

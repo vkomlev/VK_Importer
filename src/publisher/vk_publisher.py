@@ -1,8 +1,9 @@
 """Публикатор видео в VK Video."""
 
+import re
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 import logging
 from datetime import datetime
 
@@ -188,7 +189,49 @@ class VKPublisher:
         
         logger.error(f"Не удалось опубликовать видео {video.file_path} после {self.max_retries} попыток")
         return None
-    
+
+    def edit_video_title(self, owner_id: int, video_id: int, name: str) -> bool:
+        """Обновить название (заголовок) уже загруженного видео в VK.
+
+        Args:
+            owner_id: ID владельца (отрицательный для группы).
+            video_id: ID видео в VK.
+            name: Новое название.
+
+        Returns:
+            True при успехе, False при ошибке.
+        """
+        for attempt in range(self.max_retries):
+            try:
+                self.vk.video.edit(
+                    owner_id=owner_id,
+                    video_id=video_id,
+                    name=name[:128] if name else "",  # VK ограничивает длину
+                )
+                logger.info(f"Заголовок обновлён: video {owner_id}_{video_id}")
+                return True
+            except (VkApiError, ApiError) as e:
+                should_retry = self._handle_api_error(e, attempt)
+                if not should_retry:
+                    logger.error(f"Ошибка video.edit {owner_id}_{video_id}: {e}")
+                    return False
+                if attempt < self.max_retries - 1:
+                    time.sleep(self.retry_delay)
+            except Exception as e:
+                logger.error(f"Ошибка при обновлении заголовка {owner_id}_{video_id}: {e}", exc_info=True)
+                return False
+        return False
+
+    @staticmethod
+    def parse_video_url(video_url: str) -> Optional[Tuple[int, int]]:
+        """Извлечь owner_id и video_id из URL вида https://vk.com/video-12345_67890."""
+        if not video_url:
+            return None
+        m = re.search(r"video(-?\d+)_(\d+)", video_url)
+        if not m:
+            return None
+        return int(m.group(1)), int(m.group(2))
+
     def publish_batch(
         self,
         videos: list[VideoData],

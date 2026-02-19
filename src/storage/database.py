@@ -117,20 +117,7 @@ class VideoStorage:
                     (folder_path, course_type),
                 )
             logger.info("Добавлены маппинги папок по умолчанию")
-        optional = [
-            ("d:/Work/TG_Parser/out/AlgorithmPythonStruct", "Алгоритмы"),
-            ("d:/Work/TG_Parser/out/cyberguru_ege__2026-02-19_15-11", "ЕГЭ"),
-            ("d:/Work/TG_Parser/out/cyberguru_excel__2026-02-19_18-32", "Excel"),
-            ("d:/Work/TG_Parser/out/CyberGuruKomlev__2026-02-19_17-04", "Комлев"),
-            ("d:/Work/TG_Parser/out/CyberGuruPython__2026-02-19_16-24", "Python"),
-            ("d:/Work/TG_Parser/out/InfOGELihgt__2026-02-19_17-01", "ОГЭ"),
-            ("d:/Work/TG_Parser/out/SQLPandasBI__2026-02-19_20-52", "Аналитика данных"),
-        ]
-        for folder_path, course_type in optional:
-            cursor.execute(
-                "INSERT OR IGNORE INTO folder_course_mapping (folder_path, course_type) VALUES (?, ?)",
-                (folder_path, course_type),
-            )
+        # Новые папки добавляются только через CLI: python main.py folders set <путь> <курс>
         conn.commit()
         conn.close()
     

@@ -5,6 +5,7 @@ from typing import Optional
 from .base import BaseTitleGenerator
 from .generators import (
     SimpleTitleGenerator,
+    CoursePrefixTitleGenerator,
     DateTitleGenerator,
     DescriptionTitleGenerator,
     CompositeTitleGenerator,
@@ -51,8 +52,12 @@ class TitleGeneratorFactory:
         "oge_task": OGETaskTitleGenerator,
         "oge_auto": OGEAutoTitleGenerator,
         "algorithms_auto": AlgorithmsAutoTitleGenerator,
+        # Префикс-курсы (DRY): префикс + первая строка описания
+        "excel": (CoursePrefixTitleGenerator, {"prefix": "Курс Excel"}),
+        "analytics": (CoursePrefixTitleGenerator, {"prefix": "Аналитика данных"}),
+        "komlev": (CoursePrefixTitleGenerator, {"prefix": "Канал Виктора Комлева"}),
     }
-    
+
     @classmethod
     def create(cls, generator_name: str, **kwargs) -> Optional[BaseTitleGenerator]:
         """Создать генератор заголовков.
@@ -64,14 +69,17 @@ class TitleGeneratorFactory:
         Returns:
             Экземпляр генератора или None, если генератор не найден.
         """
-        generator_class = cls._generators.get(generator_name)
-        if not generator_class:
+        gen = cls._generators.get(generator_name)
+        if gen is None:
             return None
-        
+        if isinstance(gen, tuple):
+            generator_class, gen_kwargs = gen
+            gen_kwargs = {**gen_kwargs, **kwargs}
+            return generator_class(**gen_kwargs)
+        generator_class = gen
         try:
             return generator_class(**kwargs)
         except TypeError:
-            # Если генератор не принимает kwargs, создаем без них
             return generator_class()
     
     @classmethod

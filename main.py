@@ -425,6 +425,58 @@ def recalc_titles(channel: Optional[str]):
     click.echo(f"Обработано: {len(records)}, обновлено заголовков: {updated}, пропущено (файл не найден): {skipped}")
 
 
+@cli.command("update-vk-titles")
+@click.option(
+    "--ids-file",
+    type=click.Path(exists=True),
+    default="logs/titles_recalc_affected_ids.txt",
+    help="Файл со списком ID (через запятую) — по умолчанию те, у кого пересчитывали заголовки",
+)
+@click.option("--delay", "-d", type=float, default=15.0, help="Пауза между запросами к VK (сек)")
+def update_vk_titles(ids_file: str, delay: float):
+    """Обновить заголовки в VK у уже загруженных видео (по списку ID с исправленными заголовками)."""
+    access_token = get_env_var("VK_ACCESS_TOKEN")
+    if not access_token:
+        click.echo("ОШИБКА: VK_ACCESS_TOKEN не найден в .env", err=True)
+        return
+    ids_path = Path(ids_file)
+    if not ids_path.exists():
+        click.echo(f"Файл не найден: {ids_path}", err=True)
+        return
+    raw = ids_path.read_text(encoding="utf-8").strip()
+    ids = [int(x.strip()) for x in raw.split(",") if x.strip()]
+    if not ids:
+        click.echo("Список ID пуст.")
+        return
+    storage = get_storage()
+    records = storage.get_videos_by_ids(ids)
+    uploaded = [r for r in records if r.video_url]
+    if not uploaded:
+        click.echo("Среди указанных ID нет загруженных в VK видео.")
+        return
+    try:
+        publisher = VKPublisher(access_token=access_token, group_id=None, delay_between_uploads=delay, max_retries=3)
+    except VKPublisherError as e:
+        click.echo(f"Ошибка инициализации VK API: {e}", err=True)
+        return
+    click.echo(f"Будет обновлено заголовков в VK: {len(uploaded)} (пауза {delay} сек)")
+    ok = 0
+    for i, rec in enumerate(uploaded, 1):
+        parsed = VKPublisher.parse_video_url(rec.video_url or "")
+        if not parsed:
+            click.echo(f"  [{i}/{len(uploaded)}] ID {rec.id}: не удалось разобрать URL {rec.video_url!r}")
+            continue
+        owner_id, video_id = parsed
+        if publisher.edit_video_title(owner_id, video_id, rec.title or ""):
+            ok += 1
+            click.echo(f"  [{i}/{len(uploaded)}] ID {rec.id}: OK — { (rec.title or '')[:50]}...")
+        else:
+            click.echo(f"  [{i}/{len(uploaded)}] ID {rec.id}: ошибка")
+        if i < len(uploaded):
+            time.sleep(delay)
+    click.echo(f"Готово: обновлено {ok} из {len(uploaded)}.")
+
+
 def _upload_video(record: VideoRecord, storage: VideoStorage, delay: float, max_retries: int):
     """Загрузить одно видео."""
     # Загружаем переменные окружения

@@ -28,6 +28,12 @@ python main.py scan --source oge
 
 # Сканировать конкретную папку
 python main.py scan --source "input/Экпорты ЕГЭ/Апрель 25"
+
+# Сканировать все папки из маппинга БД (для пайплайнов)
+python main.py scan --source mapped
+
+# Инкремент: только видео с датой в диапазоне
+python main.py scan --source mapped --since 2026-02-01 --until 2026-02-19
 ```
 
 **Важно:** При сканировании автоматически определяются дубликаты по хешу файла. Дубликаты не добавляются повторно.
@@ -121,16 +127,42 @@ python main.py upload-all --source "input/Экпорты ЕГЭ/Апрель 25"
 python main.py upload-next --delay 10 --max-retries 5
 ```
 
+## Маппинг папок и заголовки
+
+Маппинг **папка → курс** хранится в БД; управление только через CLI:
+
+```bash
+python main.py folders list
+python main.py folders set "d:/path/to/export" ЕГЭ
+python main.py folders remove "d:/path/to/export"
+```
+
+Пересчёт заголовков в БД по правилам курса:
+
+```bash
+python main.py recalc-titles
+python main.py recalc-titles --channel Excel
+```
+
+Обновление заголовков уже загруженных видео в VK (по списку ID из файла):
+
+```bash
+python main.py update-vk-titles --ids-file logs/titles_recalc_affected_ids.txt --delay 15
+```
+
 ## Фильтры источников
 
 При сканировании можно указать источник:
 
-- `all` - все экспорты из всех папок (по умолчанию)
-- `all_channels` - все экспорты из всех каналов (все папки в `input/`)
-- `ege` - все экспорты ЕГЭ
-- `python` - все экспорты Python
-- `oge` - все экспорты ОГЭ по информатике
-- путь к папке - конкретная папка экспорта
+- `all` — все экспорты из всех папок (по умолчанию)
+- `all_channels` — все экспорты из всех каналов (все папки в `input/`)
+- `ege` — все экспорты ЕГЭ
+- `python` — все экспорты Python
+- `oge` — все экспорты ОГЭ по информатике
+- `mapped` — все папки из маппинга БД (рекомендуется для пайплайнов)
+- путь к папке — конкретная папка экспорта
+
+Опции `--since` и `--until` (формат YYYY-MM-DD) ограничивают добавляемые видео по дате.
 
 ## Структура базы данных
 

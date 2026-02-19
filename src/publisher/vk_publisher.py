@@ -3,7 +3,7 @@
 import re
 import time
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Callable
 import logging
 from datetime import datetime
 
@@ -31,6 +31,7 @@ class VKPublisher:
         delay_between_uploads: float = 5.0,
         max_retries: int = 3,
         retry_delay: float = 10.0,
+        on_token_expired: Optional[Callable[[], Optional[str]]] = None,
     ):
         """Инициализировать публикатор.
         
@@ -40,26 +41,36 @@ class VKPublisher:
             delay_between_uploads: Задержка между загрузками в секундах (по умолчанию 5 сек).
             max_retries: Максимальное количество повторных попыток при ошибке.
             retry_delay: Задержка перед повторной попыткой в секундах.
+            on_token_expired: Callback () -> str | None при ошибке 5 (User authorization failed). Если вернёт новый токен — обновляем сессию и повторяем операцию.
         """
         self.access_token = access_token
         self.group_id = group_id
-        
+        self.on_token_expired = on_token_expired
+
         if not group_id:
             logger.warning("group_id не указан. Видео будет загружаться к пользователю, а не в сообщество.")
         self.delay_between_uploads = delay_between_uploads
         self.max_retries = max_retries
         self.retry_delay = retry_delay
-        
-        # Инициализация VK API
+
+        self._init_session(access_token)
+
+    def _init_session(self, token: str) -> None:
         try:
-            self.vk_session = vk_api.VkApi(token=access_token)
+            self.vk_session = vk_api.VkApi(token=token)
             self.vk = self.vk_session.get_api()
             self.upload = VkUpload(self.vk_session)
             logger.info("VK API инициализирован успешно")
         except Exception as e:
             logger.error(f"Ошибка инициализации VK API: {e}")
             raise VKPublisherError(f"Не удалось инициализировать VK API: {e}")
-    
+
+    def update_token(self, new_token: str) -> None:
+        """Подставить новый access_token и пересоздать сессию (после обновления по refresh)."""
+        self.access_token = new_token
+        self._init_session(new_token)
+        logger.info("VK API: токен обновлён, сессия пересоздана")
+
     def _handle_api_error(self, error: Exception, attempt: int) -> bool:
         """Обработать ошибку API и определить, стоит ли повторять попытку.
         
@@ -170,11 +181,16 @@ class VKPublisher:
                 return video_url
                     
             except (VkApiError, ApiError) as e:
+                # Ошибка 5: истёк токен — обновляем и повторяем один раз
+                if isinstance(e, ApiError) and e.code == 5 and self.on_token_expired:
+                    new_token = self.on_token_expired()
+                    if new_token:
+                        logger.info("Токен обновлён по ошибке 5, повтор загрузки")
+                        self.update_token(new_token)
+                        continue
                 should_retry = self._handle_api_error(e, attempt)
                 if not should_retry:
                     return None
-                
-                # Ждем перед повторной попыткой
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay)
                     
@@ -211,6 +227,12 @@ class VKPublisher:
                 logger.info(f"Заголовок обновлён: video {owner_id}_{video_id}")
                 return True
             except (VkApiError, ApiError) as e:
+                if isinstance(e, ApiError) and e.code == 5 and self.on_token_expired:
+                    new_token = self.on_token_expired()
+                    if new_token:
+                        logger.info("Токен обновлён по ошибке 5, повтор video.edit")
+                        self.update_token(new_token)
+                        continue
                 should_retry = self._handle_api_error(e, attempt)
                 if not should_retry:
                     logger.error(f"Ошибка video.edit {owner_id}_{video_id}: {e}")

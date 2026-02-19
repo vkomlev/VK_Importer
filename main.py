@@ -1,5 +1,6 @@
 """Точка входа CLI приложения."""
 
+import subprocess
 import sys
 import io
 import time
@@ -28,16 +29,42 @@ from src.models.video import VideoData
 COURSE_TYPES = ("Python", "ЕГЭ", "ОГЭ", "Алгоритмы", "Excel", "Комлев", "Аналитика данных")
 
 # Настройка логирования (файл в папке logs, папка в .gitignore)
+# Уровень из переменной окружения LOG_LEVEL (DEBUG, INFO, WARNING, ERROR) для пайплайнов
 Path("logs").mkdir(exist_ok=True)
+_log_level_name = (get_env_var("LOG_LEVEL") or "INFO").upper()
+_log_level = getattr(logging, _log_level_name, logging.INFO)
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=_log_level,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler("logs/publisher.log", encoding="utf-8"),
     ],
 )
 logger = logging.getLogger(__name__)
+
+# Корень проекта (для вызова scripts/refresh_vk_token.py)
+_PROJECT_ROOT = Path(__file__).resolve().parent
+
+
+def _refresh_vk_token_callback() -> Optional[str]:
+    """Запуск обновления VK токена по refresh_token и возврат нового access_token из .env."""
+    script = _PROJECT_ROOT / "scripts" / "refresh_vk_token.py"
+    if not script.exists():
+        logger.warning("Скрипт scripts/refresh_vk_token.py не найден")
+        return None
+    try:
+        subprocess.run(
+            [sys.executable, str(script), "--force"],
+            cwd=str(_PROJECT_ROOT),
+            check=False,
+            capture_output=True,
+            timeout=30,
+        )
+    except Exception as e:
+        logger.warning("Ошибка при обновлении токена: %s", e)
+        return None
+    return get_env_var("VK_ACCESS_TOKEN")
 
 
 def get_storage() -> VideoStorage:
@@ -228,10 +255,10 @@ def scan(source: str, since: Optional[str], until: Optional[str]):
     date_until = _parse_date_option(until)
     if since and not date_since:
         click.echo(f"Неверный формат --since (ожидается YYYY-MM-DD): {since}", err=True)
-        return
+        sys.exit(1)
     if until and not date_until:
         click.echo(f"Неверный формат --until (ожидается YYYY-MM-DD): {until}", err=True)
-        return
+        sys.exit(1)
 
     click.echo(f"Найдено экспортов: {len(export_paths)}")
     if date_since or date_until:
@@ -438,11 +465,11 @@ def update_vk_titles(ids_file: str, delay: float):
     access_token = get_env_var("VK_ACCESS_TOKEN")
     if not access_token:
         click.echo("ОШИБКА: VK_ACCESS_TOKEN не найден в .env", err=True)
-        return
+        sys.exit(1)
     ids_path = Path(ids_file)
     if not ids_path.exists():
         click.echo(f"Файл не найден: {ids_path}", err=True)
-        return
+        sys.exit(1)
     raw = ids_path.read_text(encoding="utf-8").strip()
     ids = [int(x.strip()) for x in raw.split(",") if x.strip()]
     if not ids:
@@ -455,7 +482,13 @@ def update_vk_titles(ids_file: str, delay: float):
         click.echo("Среди указанных ID нет загруженных в VK видео.")
         return
     try:
-        publisher = VKPublisher(access_token=access_token, group_id=None, delay_between_uploads=delay, max_retries=3)
+        publisher = VKPublisher(
+            access_token=access_token,
+            group_id=None,
+            delay_between_uploads=delay,
+            max_retries=3,
+            on_token_expired=_refresh_vk_token_callback,
+        )
     except VKPublisherError as e:
         click.echo(f"Ошибка инициализации VK API: {e}", err=True)
         return
@@ -513,6 +546,7 @@ def _upload_video(record: VideoRecord, storage: VideoStorage, delay: float, max_
             group_id=group_id,
             delay_between_uploads=delay,
             max_retries=max_retries,
+            on_token_expired=_refresh_vk_token_callback,
         )
     except VKPublisherError as e:
         click.echo(f"ОШИБКА инициализации публикатора: {e}", err=True)
@@ -559,6 +593,7 @@ def _upload_batch(records: list[VideoRecord], storage: VideoStorage, delay: floa
             group_id=group_id,
             delay_between_uploads=delay,
             max_retries=max_retries,
+            on_token_expired=_refresh_vk_token_callback,
         )
     except VKPublisherError as e:
         click.echo(f"ОШИБКА инициализации публикатора: {e}", err=True)

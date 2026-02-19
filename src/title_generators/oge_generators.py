@@ -4,6 +4,7 @@ import re
 from typing import Optional
 
 from .base import BaseTitleGenerator
+from .utils import first_two_sentences
 from ..models.video import VideoData
 
 PREFIX = "Курс ОГЭ по информатике"
@@ -60,7 +61,12 @@ class OGETopicTitleGenerator(BaseTitleGenerator):
                 topic = topic_match.group(1).strip()
                 if topic and len(topic) > 3:
                     return f'{PREFIX}. Разбираем тему "{topic}"'
-
+        # Короткое название темы — первые два предложения без "Разбираем тему"
+        topic_candidate = first_line.split(".")[0].strip()
+        if len(topic_candidate) < 25 and len(description) > 50:
+            two = first_two_sentences(description, max_length=115)
+            if two:
+                return f"{PREFIX}. {two}"
         return f"{PREFIX}. {video.file_path.stem}"
 
     def get_name(self) -> str:
@@ -137,7 +143,9 @@ class OGETaskTitleGenerator(BaseTitleGenerator):
             if abs(num1 - num2) > 5:
                 task_type = f"{subtype_match.group(1)}_{subtype_match.group(2)}"
 
-        resource = self._extract_resource(first_line)
+        resource = self._extract_resource(description)
+        if not resource:
+            resource = self._extract_resource(first_line)
         if not resource and re.search(r"решуогэ", first_line, re.IGNORECASE):
             resource = "Решу ОГЭ"
 
@@ -184,10 +192,16 @@ class OGEAutoTitleGenerator(BaseTitleGenerator):
         first_line_lower = first_line.lower()
         filename_stem = video.file_path.stem
 
-        # Запись встречи в Телемосте
-        if "Встреча_в_Телемосте" in filename_stem or (
-            "встреча" in filename_stem.lower() and "телемост" in filename_stem.lower()
-        ):
+        # Явные признаки задания: "Решение N", "Разбор N_...", "Задание N_..."
+        if re.search(r"^(решение|тип)\s+\d+", first_line_lower):
+            return self.task_generator.generate(video)
+        if re.search(r"^разбор\s+(\d+[_\-]|задани[ея]\s+\d+[_\-])", first_line_lower):
+            return self.task_generator.generate(video)
+        if re.search(r"^задани[ея]\s+\d+[_\-]\d+", first_line_lower):
+            return self.task_generator.generate(video)
+
+        # Запись встречи в Телемосте — только если по описанию это действительно встреча, не по имени файла
+        if re.search(r"запись\s+встречи|встреча\s+в\s+телемост", first_line_lower):
             return f"{PREFIX}. Запись встречи"
 
         # videoXXXXX.mp4 — тема из первой строки
@@ -197,7 +211,7 @@ class OGEAutoTitleGenerator(BaseTitleGenerator):
             if len(topic) > 3:
                 return f'{PREFIX}. Разбираем тему "{topic}"'
 
-        # Одна фраза-название темы (короткое предложение с точкой в конце или без)
+        # Одна фраза-название темы (короткое — в topic_generator вернёт первые 2 предложения)
         if len(first_line) < 90 and first_line[0].isupper():
             if first_line.endswith("."):
                 topic = first_line[:-1].strip()
@@ -206,6 +220,8 @@ class OGEAutoTitleGenerator(BaseTitleGenerator):
             if 5 < len(topic) < 85 and not re.search(
                 r"^(разбор|решение)\s+задани[яе]\s+\d+\s*\.?\s*$", first_line_lower
             ):
+                if len(topic) < 25 and len(description) > 50:
+                    return self.topic_generator.generate(video)
                 return f'{PREFIX}. Разбираем тему "{topic}"'
 
         # "Разбор решения заданий N с помощью...", "Решение усложненных заданий N с помощью..." — тема

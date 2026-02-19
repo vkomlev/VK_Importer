@@ -65,15 +65,20 @@ class JSONParser(BaseParser):
             return []
         
         videos = []
-        
-        # Структура JSON может быть разной, нужно адаптировать под реальный формат
         messages = self._extract_messages(data)
-        
+        # Для сообщений с несколькими вложениями описание часто только у первого — передаём его следующим
+        last_description = ""
+
         for message in messages:
-            video_data = self._extract_video_from_message(message)
+            text = self._extract_text_from_message(message)
+            if text.strip():
+                last_description = text
+            video_data = self._extract_video_from_message(message, fallback_description=last_description)
             if video_data:
                 videos.append(video_data)
-        
+                if video_data.description:
+                    last_description = video_data.description
+
         return videos
     
     def _extract_messages(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -107,13 +112,14 @@ class JSONParser(BaseParser):
         return []
     
     def _extract_video_from_message(
-        self, message: Dict[str, Any]
+        self, message: Dict[str, Any], fallback_description: str = ""
     ) -> Optional[VideoData]:
         """Извлечь информацию о видео из сообщения.
-        
+
         Args:
             message: Словарь с данными сообщения.
-            
+            fallback_description: Описание от предыдущего сообщения (для многоприкреплений).
+
         Returns:
             VideoData или None, если видео не найдено.
         """
@@ -167,9 +173,11 @@ class JSONParser(BaseParser):
             logger.debug(f"Видеофайл не найден: {file_path}")
             return None
         
-        # Извлечение текста сообщения
+        # Извлечение текста сообщения (если пусто — у многоприкреплений описание у первого)
         description = self._extract_text_from_message(message)
-        
+        if not description.strip():
+            description = fallback_description
+
         # Извлечение даты
         date = None
         if "date" in message:

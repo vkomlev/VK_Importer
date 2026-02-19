@@ -67,72 +67,59 @@ class HTMLParser(BaseParser):
         messages = soup.find_all("div", class_=re.compile(r"message default"))
         
         for message in messages:
-            video_data = self._extract_video_from_message(message)
-            if video_data:
+            # В одном сообщении может быть несколько видео — у всех одно описание
+            for video_data in self._extract_videos_from_message(message):
                 videos.append(video_data)
-        
         return videos
     
-    def _extract_video_from_message(
-        self, message_element
-    ) -> Optional[VideoData]:
-        """Извлечь информацию о видео из элемента сообщения.
-        
+    def _extract_videos_from_message(self, message_element) -> List[VideoData]:
+        """Извлечь все видео из элемента сообщения (одно описание на все вложения).
+
         Args:
             message_element: BeautifulSoup элемент сообщения.
-            
+
         Returns:
-            VideoData или None, если видео не найдено.
+            Список VideoData (пустой, если видео не найдено).
         """
-        # Поиск видеофайлов в сообщении
-        # MP4 файлы обычно в элементах с классом video_file_wrap
-        # WEBM файлы могут быть в элементах с классом media_file
-        video_wrap = message_element.find("a", class_="video_file_wrap")
-        
-        if not video_wrap:
-            # Пробуем найти WEBM файлы в media_file элементах
-            media_link = message_element.find("a", class_="media_file")
-            if media_link:
-                href = media_link.get("href", "")
-                if href and (href.endswith(".webm") or href.endswith(".mp4")):
-                    video_wrap = media_link
-        
-        if not video_wrap:
-            return None
-        
-        # Получаем путь к видео из атрибута href
-        video_href = video_wrap.get("href")
-        if not video_href:
-            return None
-        
-        # Определяем расширение файла для выбора правильной папки
-        # MP4 файлы в video_files/, WEBM в files/
-        file_ext = Path(video_href).suffix.lower()
-        
-        # Разрешаем путь к видеофайлу
-        video_path = self._resolve_video_path(video_href, file_ext)
-        if not video_path or not video_path.exists():
-            return None
-        
-        # Извлечение текста сообщения
+        # Собираем все ссылки на видео: video_file_wrap и media_file с .webm/.mp4
+        video_links: List = []
+        for a in message_element.find_all("a", class_="video_file_wrap"):
+            video_links.append(a)
+        for a in message_element.find_all("a", class_="media_file"):
+            href = a.get("href", "")
+            if href and (href.endswith(".webm") or href.endswith(".mp4")):
+                video_links.append(a)
+
+        if not video_links:
+            return []
+
         text_elem = message_element.find("div", class_="text")
         description = text_elem.get_text(separator=" ", strip=True) if text_elem else ""
-        
-        # Извлечение даты из атрибута title элемента date
-        # Ищем элемент с классом "date" и атрибутом "details"
         date_elem = message_element.find("div", class_=re.compile(r"date.*details"))
         date = None
         if date_elem:
             date_title = date_elem.get("title")
             if date_title:
                 date = self._parse_date(date_title)
-        
-        return VideoData(
-            file_path=video_path,
-            title="",  # Будет сгенерирован позже
-            description=description,
-            date=date
-        )
+
+        result: List[VideoData] = []
+        for video_wrap in video_links:
+            video_href = video_wrap.get("href")
+            if not video_href:
+                continue
+            file_ext = Path(video_href).suffix.lower()
+            video_path = self._resolve_video_path(video_href, file_ext)
+            if not video_path or not video_path.exists():
+                continue
+            result.append(
+                VideoData(
+                    file_path=video_path,
+                    title="",
+                    description=description,
+                    date=date,
+                )
+            )
+        return result
     
     def _resolve_video_path(self, href: str, file_ext: str) -> Optional[Path]:
         """Разрешить путь к видеофайлу.

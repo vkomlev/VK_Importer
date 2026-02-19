@@ -44,8 +44,12 @@ class AlgorithmsAutoTitleGenerator(BaseTitleGenerator):
                 title = title[: MAX_TITLE_LEN - len(PREFIX) - 3].rsplit(" ", 1)[0] + "..."
             return PREFIX + title
 
-        # Нет описания — короткий заголовок из stem (избегаем длинных имён типа "2_Встреча_в_Телемосте_...")
+        # Нет описания — заголовок из stem
         stem = video.file_path.stem
+        # Формат "2.4" или "2.4 a7edf3" (номер с хешем) — просто "Задание 2.4"
+        m = re.match(r"^(\d+\.\d+)\s*[a-fA-F0-9]*$", stem)
+        if m:
+            return f"{PREFIX}Задание {m.group(1)}"
         m = re.match(r"^\d+_?(.+)$", stem)
         if m:
             rest = m.group(1)

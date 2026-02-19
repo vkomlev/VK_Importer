@@ -7,10 +7,28 @@ from .base import BaseTitleGenerator
 from ..models.video import VideoData
 
 
+def _first_two_sentences(text: str, max_length: int = 120) -> str:
+    """Взять первые два предложения из текста (разделитель — точка с пробелом)."""
+    text = text.strip()
+    if not text:
+        return ""
+    parts = re.split(r'\.\s+', text)
+    if len(parts) == 1:
+        s = parts[0].strip()
+        return (s + ".") if not s.endswith(".") else s
+    two = (parts[0].strip() + ". " + parts[1].strip()).strip()
+    if not two.endswith("."):
+        two += "."
+    if len(two) > max_length:
+        two = two[: max_length - 3].rsplit(" ", 1)[0] + "..."
+    return two
+
+
 class EGETopicTitleGenerator(BaseTitleGenerator):
     """Генератор заголовков для разбора тем ЕГЭ.
     
-    Формат: "Разбираем тему "Название темы""
+    Формат: "Разбираем тему \"Название темы\"" или для коротких тем —
+    "Курс ЕГЭ по информатике. Первые два предложения описания" (без "Разбираем тему").
     """
     
     def generate(self, video: VideoData) -> str:
@@ -69,6 +87,13 @@ class EGETopicTitleGenerator(BaseTitleGenerator):
                 if topic and len(topic) > 3:
                     return f'Курс ЕГЭ по информатике. Разбираем тему "{topic}"'
         
+        # Короткое название темы (одно слово, напр. "Лайфхак") — первые два предложения без "Разбираем тему"
+        topic_candidate = first_line.split('.')[0].strip()
+        if len(topic_candidate) < 25 and len(description) > 50:
+            two = _first_two_sentences(description, max_length=115)
+            if two:
+                return f'Курс ЕГЭ по информатике. {two}'
+        
         return f"Курс ЕГЭ по информатике. {video.file_path.stem}"
     
     def get_name(self) -> str:
@@ -85,31 +110,54 @@ class EGETaskTitleGenerator(BaseTitleGenerator):
     def _extract_resource(self, text: str) -> Optional[str]:
         """Извлечь название ресурса из текста.
         
+        Источники заданий: РешуЕГЭ, КЕГЭ/КомпЕГЭ, Яндекс Учебник, сборник Крылова, Поляков и др.
+        
         Args:
             text: Текст для анализа.
             
         Returns:
             Название ресурса или None.
         """
-        # Паттерны для ресурсов в скобках
+        text_lower = text.lower()
+        # Порядок важен: более специфичные паттерны первыми
+        # Яндекс (ЕГЭ) / Яндекс Учебник
+        if re.search(r'яндекс\s*\(?\s*егэ\s*\)?|яндекс\s+учебник', text_lower):
+            return "Яндекс Учебник"
+        if re.search(r'\bяндекс\b', text_lower):
+            return "Яндекс Учебник"
+        # Сборник Крылова
+        if re.search(r'\bкрылов\b', text_lower):
+            return "Крылов"
+        # КомпЕГЭ = КЕГЭ (кириллица и латиница: CompEGE, KompEGE)
+        if re.search(r'компегэ|комп\s*егэ|кегэ|comp\s*ege|kompege', text_lower):
+            return "КЕГЭ"
+        # РешуЕГЭ (и опечатка "Рушу ЕГЭ")
+        if re.search(r'решуегэ|решу\s+егэ|рушу\s+егэ', text_lower):
+            return "Решу ЕГЭ"
+        # Паттерны в скобках
         resource_patterns = [
             r'\(Решу\s+ЕГЭ\)',
-            r'\(РешуЕГЭ\)',  # Без пробела
+            r'\(РешуЕГЭ\)',
             r'\(КЕГЭ\)',
             r'\(Поляков\)',
             r'\(Комп\s+ЕГЭ\)',
             r'\(КЕГЭ\.\w+\)',
+            r'\(Яндекс[^)]*\)',
+            r'\(Крылов[^)]*\)',
         ]
-        
         for pattern in resource_patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                return match.group(0).strip('()')
-        
-        # Проверяем без скобок (например, "Поляков" в конце)
+                s = match.group(0).strip('()')
+                if re.search(r'яндекс', s, re.IGNORECASE):
+                    return "Яндекс Учебник"
+                if re.search(r'крылов', s, re.IGNORECASE):
+                    return "Крылов"
+                if re.search(r'комп|кегэ', s, re.IGNORECASE):
+                    return "КЕГЭ"
+                return s
         if re.search(r'\s+Поляков\s*$', text, re.IGNORECASE):
             return "Поляков"
-        
         return None
     
     def generate(self, video: VideoData) -> str:
@@ -125,8 +173,9 @@ class EGETaskTitleGenerator(BaseTitleGenerator):
         if not description:
             return f"Курс ЕГЭ по информатике. {video.file_path.stem}"
         
-        # Извлекаем первую строку
         first_line = description.split('\n')[0].strip()
+        # Поиск номера задания по всему описанию, если в первой строке не нашли
+        full_text_for_number = description.replace("\n", " ")
         
         # Паттерны для номеров заданий (расширенные)
         patterns = [
@@ -180,12 +229,22 @@ class EGETaskTitleGenerator(BaseTitleGenerator):
             task_number = int(range_match.group(1))
             task_range = f"{range_match.group(1)}-{range_match.group(2)}"
         else:
-            # Ищем одиночный номер задания
             for pattern in patterns:
                 match = re.search(pattern, first_line, re.IGNORECASE)
                 if match:
                     task_number = int(match.group(1))
                     break
+            # Если в первой строке не нашли — ищем по всему описанию (для 1057–1061 и подобных)
+            if not task_number:
+                for pattern in patterns:
+                    match = re.search(pattern, full_text_for_number, re.IGNORECASE)
+                    if match:
+                        task_number = int(match.group(1))
+                        break
+                if not task_number and re.search(r'\b(\d+)[_](\d+)\b', full_text_for_number):
+                    m = re.search(r'\b(\d+)[_](\d+)\b', full_text_for_number)
+                    if m:
+                        task_number = int(m.group(1))
         
         if not task_number:
             return f"Курс ЕГЭ по информатике. {video.file_path.stem}"
@@ -207,10 +266,11 @@ class EGETaskTitleGenerator(BaseTitleGenerator):
                 if abs(num1 - num2) > 5:  # Если разница большая, это подтип, а не диапазон
                     task_type = f"{subtype_match.group(1)}_{subtype_match.group(2)}"
         
-        # Извлекаем ресурс (улучшенное извлечение)
-        resource = self._extract_resource(first_line)
-        # Также проверяем "РешуЕГЭ" без пробела
-        if not resource and re.search(r'решуегэ', first_line, re.IGNORECASE):
+        # Извлекаем ресурс по всему описанию (источник может быть в любом месте текста)
+        resource = self._extract_resource(description)
+        if not resource:
+            resource = self._extract_resource(first_line)
+        if not resource and re.search(r'решуегэ|рушу\s*егэ', first_line, re.IGNORECASE):
             resource = "Решу ЕГЭ"
         
         # Формируем заголовок
@@ -292,11 +352,26 @@ class EGEAutoTitleGenerator(BaseTitleGenerator):
         
         # "Пример X для задания Y" или "Пример X в файле B задания Y" - это тема (проверяем ПЕРВОЙ)
         if 'пример' in first_line_lower and 'задани' in first_line_lower:
-            # Проверяем различные варианты - упрощаем паттерн
             if 'в файле' in first_line_lower or 'для задани' in first_line_lower:
                 topic = first_line.split('.')[0].strip()
                 if len(topic) > 5:
                     return f'Курс ЕГЭ по информатике. Разбираем тему "{topic}"'
+        
+        # Явные признаки задания: "Решение 13_69921", "Тип 13_...", "Разбор 8_40724" (не "Разбор заданий 2. Тема")
+        if re.search(r'^(решение|тип)\s+\d+', first_line_lower):
+            return self.task_generator.generate(video)
+        if re.search(r'^разбор\s+(\d+[_\-]|задани[ея]\s+\d+[_\-])', first_line_lower):
+            return self.task_generator.generate(video)
+        # "Задание 24_21421 (Комп ЕГЭ)" или "Задание N_... Уровень" — это задание, не тема
+        if re.search(r'^задани[ея]\s+\d+[_\-]\d+', first_line_lower) or \
+           (re.search(r'^задани[ея]\s+\d+', first_line_lower) and re.search(r'компегэ|кегэ|решу\s*егэ|уровень', first_line_lower)):
+            return self.task_generator.generate(video)
+        # В описании есть номер задания (15_37743) и контекст — трактуем как задание (1057–1061)
+        desc_lower = description.lower()
+        if re.search(r'\b\d+_\d+\b', description) and re.search(r'задани|решение|разбор|егэ', desc_lower):
+            res = self.task_generator.generate(video)
+            if video.file_path.stem not in res:
+                return res
         
         # Проверяем, является ли это темой
         # Уроки с подчеркиванием или точкой
@@ -335,11 +410,13 @@ class EGEAutoTitleGenerator(BaseTitleGenerator):
                 if len(topic) > 5:
                     return f'Курс ЕГЭ по информатике. Разбираем тему "{topic}"'
         
-        # Инструкции и темы без номеров
+        # Инструкции и темы без номеров (короткие темы передаём в topic_generator — там правило «первые 2 предложения»)
         if re.search(r'инструкция|способ[овы]|ответы\s+на\s+вопросы|карта\s+егэ|агрегатные\s+функции|лайфхак|несколько\s+приемов|особенности\s+и\s+тонкости|регулярные\s+выражения|заполняем\s+карту|теория\s+сетей|группы\s+в\s+регулярных|опережающие\s+проверки|переводим\s+число', first_line_lower):
-            # Формируем заголовок из первой строки
             topic = first_line.split('.')[0].strip()
             if len(topic) > 5:
+                # Короткое название («Лайфхак» и т.п.) — в topic_generator вернёт первые 2 предложения
+                if len(topic) < 25:
+                    return self.topic_generator.generate(video)
                 return f'Курс ЕГЭ по информатике. Разбираем тему "{topic}"'
         
         # "Термины и теория задания X" - это тема, а не задание

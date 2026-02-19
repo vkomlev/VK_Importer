@@ -119,6 +119,12 @@ class VideoStorage:
             logger.info("Добавлены маппинги папок по умолчанию")
         optional = [
             ("d:/Work/TG_Parser/out/AlgorithmPythonStruct", "Алгоритмы"),
+            ("d:/Work/TG_Parser/out/cyberguru_ege__2026-02-19_15-11", "ЕГЭ"),
+            ("d:/Work/TG_Parser/out/cyberguru_excel__2026-02-19_18-32", "Excel"),
+            ("d:/Work/TG_Parser/out/CyberGuruKomlev__2026-02-19_17-04", "Комлев"),
+            ("d:/Work/TG_Parser/out/CyberGuruPython__2026-02-19_16-24", "Python"),
+            ("d:/Work/TG_Parser/out/InfOGELihgt__2026-02-19_17-01", "ОГЭ"),
+            ("d:/Work/TG_Parser/out/SQLPandasBI__2026-02-19_20-52", "Аналитика данных"),
         ]
         for folder_path, course_type in optional:
             cursor.execute(
@@ -219,6 +225,30 @@ class VideoStorage:
             return None
         
         return self._row_to_record(row)
+
+    def get_previous_in_folder(self, video_id: int) -> Optional[VideoRecord]:
+        """Предыдущая запись в той же папке источника (по id). Для копирования описания при многоприкреплениях."""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT v2.* FROM videos v1
+            JOIN videos v2 ON v1.source_folder = v2.source_folder AND v2.id < v1.id
+            WHERE v1.id = ?
+            ORDER BY v2.id DESC LIMIT 1
+        """, (video_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return self._row_to_record(row) if row else None
+
+    def update_description(self, video_id: int, description: str) -> None:
+        """Обновить только описание записи по id."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE videos SET description = ? WHERE id = ?", (description, video_id))
+        conn.commit()
+        conn.close()
+        logger.debug(f"Обновлено описание для видео id={video_id}")
     
     def get_next_unuploaded(self, channel: Optional[str] = None, source_folder: Optional[str] = None) -> Optional[VideoRecord]:
         """Получить следующее не загруженное видео.
@@ -329,6 +359,27 @@ class VideoStorage:
         
         return [self._row_to_record(row) for row in rows]
     
+    def get_videos_by_ids(self, video_ids: List[int]) -> List[VideoRecord]:
+        """Получить записи по списку ID (сохраняя порядок ID).
+        
+        Args:
+            video_ids: Список id видео.
+            
+        Returns:
+            Список записей (отсутствующие ID пропускаются).
+        """
+        if not video_ids:
+            return []
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        placeholders = ",".join("?" * len(video_ids))
+        cursor.execute(f"SELECT * FROM videos WHERE id IN ({placeholders})", video_ids)
+        rows = cursor.fetchall()
+        conn.close()
+        by_id = {row["id"]: self._row_to_record(row) for row in rows}
+        return [by_id[i] for i in video_ids if i in by_id]
+    
     def get_all_unuploaded(self, channel: Optional[str] = None, source_folder: Optional[str] = None) -> List[VideoRecord]:
         """Получить все не загруженные видео.
         
@@ -420,7 +471,7 @@ class VideoStorage:
     
     # --- Маппинг папка -> тип курса ---
     
-    VALID_COURSE_TYPES = ("Python", "ЕГЭ", "ОГЭ", "Алгоритмы")
+    VALID_COURSE_TYPES = ("Python", "ЕГЭ", "ОГЭ", "Алгоритмы", "Excel", "Комлев", "Аналитика данных")
     
     def set_folder_course(self, folder_path: str, course_type: str) -> None:
         """Установить тип курса для папки.

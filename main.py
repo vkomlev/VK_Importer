@@ -113,15 +113,32 @@ def get_export_paths(source_filter: Optional[str] = None) -> list[Path]:
                 if export_folder.is_dir():
                     export_paths.append(export_folder)
         return export_paths
+
+    elif source_filter.lower() == "tg_parser":
+        # Выгрузки TG Parser (инкрементные и первоначальные)
+        tg_out = Path("d:/Work/TG_Parser/out")
+        folders = [
+            "cyberguru_ege__2026-02-19_15-11",
+            "cyberguru_excel__2026-02-19_18-32",
+            "CyberGuruKomlev__2026-02-19_17-04",
+            "CyberGuruPython__2026-02-19_16-24",
+            "InfOGELihgt__2026-02-19_17-01",
+            "SQLPandasBI__2026-02-19_20-52",
+        ]
+        export_paths = []
+        for name in folders:
+            p = tg_out / name
+            if p.exists() and p.is_dir():
+                export_paths.append(p)
+        return export_paths
     
     else:
         # Конкретная папка
         export_path = Path(source_filter)
         if export_path.exists():
             return [export_path]
-        else:
-            click.echo(f"ОШИБКА: Путь не существует: {export_path}", err=True)
-            return []
+        click.echo(f"ОШИБКА: Путь не существует: {export_path}", err=True)
+        return []
 
 
 @click.group()
@@ -173,7 +190,7 @@ def folders_remove(folder_path: str):
 @click.option(
     "--source", "-s",
     default="all",
-    help="Источник видео: 'all', 'all_channels', 'ege', 'python', 'oge' или путь к папке"
+    help="Источник видео: 'all', 'all_channels', 'ege', 'python', 'oge', 'tg_parser' или путь к папке"
 )
 def scan(source: str):
     """Сканировать экспорты и добавить видео в хранилище."""

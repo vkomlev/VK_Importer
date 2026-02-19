@@ -4,7 +4,10 @@ import re
 from typing import Optional
 
 from .base import BaseTitleGenerator
+from .utils import first_two_sentences
 from ..models.video import VideoData
+
+PREFIX_PY = "Курс по Python базовый. "
 
 
 class PythonTopicTitleGenerator(BaseTitleGenerator):
@@ -44,9 +47,12 @@ class PythonTopicTitleGenerator(BaseTitleGenerator):
         mini_urok_match = re.search(r'мини-урок\s+по\s+(.+?)(?:\s+в\s+python|\.|$)', first_line, re.IGNORECASE)
         if mini_urok_match:
             topic = mini_urok_match.group(1).strip()
-            # Если есть "работе с", добавляем его
-            if 'работе с' in first_line_lower:
-                topic = 'работе с ' + topic
+            # Не дублировать "работе с": тема уже может содержать "работе с срезами"
+            if "работе с" in first_line_lower and not topic.lower().startswith("работе с"):
+                topic = "работе с " + topic
+            # Привести к именительному падежу для заголовка: "созданию строк" -> "создание строк"
+            topic = re.sub(r"\bсозданию\b", "создание", topic, flags=re.IGNORECASE)
+            topic = re.sub(r"\bработе\s+с\b", "работа с", topic, flags=re.IGNORECASE)
             if topic and len(topic) > 2:
                 return f'Курс по Python базовый. Разбираем тему "{topic}"'
         
@@ -69,25 +75,21 @@ class PythonTopicTitleGenerator(BaseTitleGenerator):
                 return f'Курс по Python базовый. Разбираем тему "{topic}"'
         
         # Если паттерны не сработали, но текст похож на тему (нет номера задания)
-        # Проверяем, что это не задание
         if not re.search(r'задание\s+\d+|задани[ея]\s+\d+', first_line_lower):
-            # Берем первую строку до точки как тему
             topic = first_line.split('.')[0].strip()
-            # Убираем "в Python" из конца
             topic = re.sub(r'\s+в\s+python\s*$', '', topic, flags=re.IGNORECASE)
-            # Убираем "на Python" из конца
             topic = re.sub(r'\s+на\s+python\s*$', '', topic, flags=re.IGNORECASE)
-            # Убираем "под Windows" и подобные фразы из конца
             topic = re.sub(r'\s+под\s+\w+\s*$', '', topic, flags=re.IGNORECASE)
-            
-            # Если тема очень короткая (1-2 слова), но это известная тема
             if len(topic) <= 10 and topic.lower() in ['циклы', 'ооп', 'числа', 'строки', 'списки']:
-                return f'Курс по Python базовый. Разбираем тему "{topic}"'
-            
-            if topic and len(topic) > 3:  # Уменьшил минимальную длину до 3
-                return f'Курс по Python базовый. Разбираем тему "{topic}"'
-        
-        return f"Курс по Python базовый. {video.file_path.stem}"
+                return f'{PREFIX_PY}Разбираем тему "{topic}"'
+            # Короткое название темы — первые два предложения без "Разбираем тему"
+            if topic and len(topic) < 25 and len(description) > 50:
+                two = first_two_sentences(description, max_length=115)
+                if two:
+                    return f'{PREFIX_PY}{two}'
+            if topic and len(topic) > 3:
+                return f'{PREFIX_PY}Разбираем тему "{topic}"'
+        return f"{PREFIX_PY}{video.file_path.stem}"
     
     def get_name(self) -> str:
         """Получить имя генератора."""
@@ -246,6 +248,23 @@ class PythonAutoTitleGenerator(BaseTitleGenerator):
         
         first_line = description.split('\n')[0].strip()
         first_line_lower = first_line.lower()
+        
+        # Явные признаки задания: "Решение N", "Разбор задания N_...", "Задание N (тема)" с номером
+        if re.search(r'^(решение|разбор)\s+\d+', first_line_lower):
+            return self.task_generator.generate(video)
+        if re.search(r'^разбор\s+задани[ея]\s+\d+[_\-]', first_line_lower):
+            return self.task_generator.generate(video)
+        if re.search(r'^задани[ея]\s+\d+[_\-]\d+', first_line_lower):
+            return self.task_generator.generate(video)
+        # "В задании нельзя...", "Дан список... В задании нельзя" — задание без номера (737)
+        if re.search(r'в задании\s+нельз|задани[ея]\s+нельз|задани[ея]\s+нужно', first_line_lower) or \
+           re.search(r'в задании\s+нельз|задани[ея]\s+нельз', description.lower()):
+            part = first_line.split(".")[0].strip()
+            if len(part) > 80:
+                part = part[:77].rsplit(" ", 1)[0] + "..."
+            if part:
+                return f'{PREFIX_PY}Разбираем задание: {part}'
+            return f'{PREFIX_PY}Разбираем задание'
         
         # Проверяем, является ли это темой (урок без номера задания)
         # Паттерны для тем: "Урок.", "Видеоурок.", "Мини-урок", "Как...", "Понятие...", "Работа с...", "Методы...", "Первая программа", "Знакомство...", "Самые главные..."

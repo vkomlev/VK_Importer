@@ -19,9 +19,13 @@ if sys.platform == 'win32':
 
 from src.storage.database import VideoStorage, VideoRecord
 from src.storage.scanner import VideoScanner
+from src.title_generators.factory import TitleGeneratorFactory
 from src.publisher.vk_publisher import VKPublisher, VKPublisherError
 from src.utils.env_utils import get_env_var
 from src.models.video import VideoData
+
+# Типы курсов для маппинга папка → курс (управление через CLI: folders set/list)
+COURSE_TYPES = ("Python", "ЕГЭ", "ОГЭ", "Алгоритмы", "Excel", "Комлев", "Аналитика данных")
 
 # Настройка логирования (файл в папке logs, папка в .gitignore)
 Path("logs").mkdir(exist_ok=True)
@@ -149,17 +153,17 @@ def cli():
 
 @cli.group()
 def folders():
-    """Маппинг папок на тип курса (Python, ЕГЭ, ОГЭ)."""
+    """Маппинг папок на тип курса. Управление только через CLI (без изменения кода)."""
     pass
 
 
 @folders.command("list")
 def folders_list():
-    """Показать все папки и их тип курса."""
+    """Показать все папки и их тип курса (из БД)."""
     storage = get_storage()
     rows = storage.list_folder_mappings()
     if not rows:
-        click.echo("Маппинг пуст.")
+        click.echo("Маппинг пуст. Добавьте: folders set <путь> <курс>")
         return
     for folder_path, course_type in rows:
         click.echo(f"  {folder_path}  →  {course_type}")
@@ -167,9 +171,9 @@ def folders_list():
 
 @folders.command("set")
 @click.argument("folder_path", type=click.Path(exists=False))
-@click.argument("course_type", type=click.Choice(["Python", "ЕГЭ", "ОГЭ", "Алгоритмы"]))
+@click.argument("course_type", type=click.Choice(list(COURSE_TYPES)))
 def folders_set(folder_path: str, course_type: str):
-    """Установить тип курса для папки."""
+    """Установить тип курса для папки (путь сохраняется в БД)."""
     storage = get_storage()
     storage.set_folder_course(folder_path, course_type)
     click.echo(f"Установлено: {folder_path}  →  {course_type}")
@@ -186,37 +190,70 @@ def folders_remove(folder_path: str):
         click.echo(f"Маппинг для папки не найден: {folder_path}", err=True)
 
 
+def _parse_date_option(value: Optional[str]):
+    """Парсинг даты из строки YYYY-MM-DD."""
+    if not value:
+        return None
+    try:
+        from datetime import datetime
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
 @cli.command()
 @click.option(
     "--source", "-s",
     default="all",
-    help="Источник видео: 'all', 'all_channels', 'ege', 'python', 'oge', 'tg_parser' или путь к папке"
+    help="Источник: 'all', 'all_channels', 'ege', 'python', 'oge', 'mapped' или путь к папке"
 )
-def scan(source: str):
+@click.option("--since", help="Добавлять только видео с датой >= YYYY-MM-DD (инкременты)")
+@click.option("--until", help="Добавлять только видео с датой <= YYYY-MM-DD")
+def scan(source: str, since: Optional[str], until: Optional[str]):
     """Сканировать экспорты и добавить видео в хранилище."""
     click.echo("=" * 80)
     click.echo("Сканирование экспортов")
     click.echo("=" * 80)
-    
+
     storage = get_storage()
-    scanner = VideoScanner(storage)
-    
-    export_paths = get_export_paths(source)
+    if source.lower() == "mapped":
+        export_paths = [Path(p) for p, _ in storage.list_folder_mappings() if Path(p).exists()]
+    else:
+        export_paths = get_export_paths(source)
     if not export_paths:
         click.echo("Не найдено экспортов для сканирования", err=True)
         return
-    
+
+    date_since = _parse_date_option(since)
+    date_until = _parse_date_option(until)
+    if since and not date_since:
+        click.echo(f"Неверный формат --since (ожидается YYYY-MM-DD): {since}", err=True)
+        return
+    if until and not date_until:
+        click.echo(f"Неверный формат --until (ожидается YYYY-MM-DD): {until}", err=True)
+        return
+
     click.echo(f"Найдено экспортов: {len(export_paths)}")
-    
-    stats = scanner.scan_and_add(export_paths, skip_duplicates=True)
-    
+    if date_since or date_until:
+        click.echo(f"Фильтр по дате: с {date_since or '—'} по {date_until or '—'}")
+
+    scanner = VideoScanner(storage)
+    stats = scanner.scan_and_add(
+        export_paths,
+        skip_duplicates=True,
+        date_since=date_since,
+        date_until=date_until,
+    )
+
     click.echo("\n" + "=" * 80)
     click.echo("РЕЗУЛЬТАТЫ СКАНИРОВАНИЯ")
     click.echo("=" * 80)
     click.echo(f"Добавлено новых: {stats['added']}")
     click.echo(f"Дубликатов пропущено: {stats['duplicates']}")
     click.echo(f"Обновлено существующих: {stats['updated']}")
-    
+    if stats.get("skipped_date", 0):
+        click.echo(f"Пропущено по дате: {stats['skipped_date']}")
+
     # Показываем статистику
     db_stats = storage.get_statistics()
     click.echo(f"\nВсего в базе: {db_stats['total']}")
@@ -337,6 +374,55 @@ def upload_all(channel: Optional[str], source: Optional[str], delay: float, max_
     
     click.echo(f"Будет загружено видео: {len(records)}")
     _upload_batch(records, storage, delay, max_retries)
+
+
+def _get_title_generator_for_channel(channel: Optional[str]):
+    """Генератор заголовков по каналу (тот же маппинг, что в сканере)."""
+    names = {
+        "ЕГЭ": "ege_auto",
+        "ОГЭ": "oge_auto",
+        "Алгоритмы": "algorithms_auto",
+        "Python": "python_auto",
+        "Excel": "excel",
+        "Аналитика данных": "analytics",
+        "Комлев": "komlev",
+    }
+    name = names.get((channel or "").strip()) if channel else None
+    return TitleGeneratorFactory.create(name) if name else TitleGeneratorFactory.create("simple")
+
+
+@cli.command("recalc-titles")
+@click.option("--channel", "-c", help="Пересчитать только для канала (например Excel, Комлев, Аналитика данных)")
+def recalc_titles(channel: Optional[str]):
+    """Пересчитать заголовки по правилам курса и обновить БД."""
+    storage = get_storage()
+    records = storage.get_videos_range(0, 500000, channel=channel)
+    if not records:
+        click.echo("Нет записей для пересчёта.")
+        return
+    updated = 0
+    skipped = 0
+    for rec in records:
+        gen = _get_title_generator_for_channel(rec.channel)
+        if not gen:
+            continue
+        try:
+            v = VideoData(
+                file_path=Path(rec.file_path),
+                title=rec.title or "",
+                description=rec.description or "",
+                date=rec.date,
+                channel=rec.channel,
+            )
+        except ValueError:
+            skipped += 1
+            continue
+        new_title = gen.generate(v)
+        if new_title != (rec.title or ""):
+            rec.title = new_title
+            storage.add_video(rec)
+            updated += 1
+    click.echo(f"Обработано: {len(records)}, обновлено заголовков: {updated}, пропущено (файл не найден): {skipped}")
 
 
 def _upload_video(record: VideoRecord, storage: VideoStorage, delay: float, max_retries: int):

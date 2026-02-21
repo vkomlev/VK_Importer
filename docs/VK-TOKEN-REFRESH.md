@@ -8,6 +8,7 @@
 - В `.env` должны быть:
   - **VK_CLIENT_ID**, **VK_CLIENT_SECRET** — из настроек приложения VK ID (у вас уже есть).
   - **VK_REFRESH_TOKEN** — выдан один раз при авторизации через VK ID (authorization code flow). Без него автообновление невозможно.
+  - **VK_DEVICE_ID** — сохраняется при первичной авторизации через VK ID и используется при refresh.
 
 ## Как получить токены один раз
 
@@ -15,6 +16,30 @@
 
 - **Классический VK OAuth (oauth.vk.com)** — по умолчанию. Подходит для приложений, созданных в [VK для разработчиков](https://dev.vk.com/). Redirect URI в настройках приложения: `https://oauth.vk.com/blank.html`.
 - **VK ID (id.vk.ru)** — для приложений, созданных в VK ID. В `.env` укажите `VK_OAUTH_ENDPOINT=id`.
+
+### Шаги (VK ID + relay без ручного копирования URL)
+
+1. В настройках VK ID приложения добавьте доверенный Redirect URL:
+   - `https://victor-komlev.ru/vk-relay/`
+2. На странице `https://victor-komlev.ru/vk-relay/` разместите relay-скрипт, который делает redirect на локальный listener:
+   - `http://127.0.0.1:53682/callback` с сохранением query/hash параметров.
+3. В `.env` укажите:
+   ```dotenv
+   VK_OAUTH_ENDPOINT=id
+   VK_REDIRECT_URI=https://victor-komlev.ru/vk-relay/
+   VK_SCOPE=video,offline
+   VK_LOCAL_CALLBACK_PORT=53682
+   VK_LOCAL_CALLBACK_TIMEOUT_SEC=180
+   VK_AUTO_CAPTURE_CODE=1
+   ```
+4. Запустите:
+   ```bash
+   python scripts/get_vk_token_by_code.py
+   ```
+   Скрипт откроет браузер, дождётся callback на `127.0.0.1` и автоматически обменяет `code` на токены.
+   Также сохранит `VK_DEVICE_ID` в `.env`.
+
+Если авто-перехват не сработал, скрипт сам перейдёт в fallback-режим и попросит вставить URL вручную.
 
 ### Шаги (классический OAuth, по умолчанию)
 
@@ -30,6 +55,17 @@
 **Примечание:** Токен, полученный через классический OAuth, может не поддерживать обновление через `refresh_vk_token.py` (он рассчитан на VK ID). Тогда при истечении токена нужно снова запустить `get_vk_token_by_code.py`.
 
 **Ошибка SSL (CERTIFICATE_VERIFY_FAILED, self-signed certificate):** часто из-за корпоративного прокси или антивируса. Можно отключить проверку SSL для запросов к VK: в `.env` добавьте `VK_SSL_VERIFY=0` или перед запуском `set VK_SSL_VERIFY=0` (Windows) / `export VK_SSL_VERIFY=0` (Linux/macOS). Используйте только в доверенной сети.
+
+## Комментарии в .env
+
+Да, старые настройки можно закомментировать через `#`:
+
+```dotenv
+# VK_OAUTH_ENDPOINT=classic
+# VK_REDIRECT_URI=https://oauth.vk.com/blank.html
+VK_OAUTH_ENDPOINT=id
+VK_REDIRECT_URI=https://victor-komlev.ru/vk-relay/
+```
 
 ## Использование скрипта
 
@@ -50,6 +86,13 @@ python scripts/refresh_vk_token.py --force
 - **VK_USER_TOKEN_EXPIRES_AT** — Unix-время истечения (текущее время + expires_in из ответа)
 - **VK_USER_ID** — идентификатор пользователя (если пришёл в ответе)
 - **VK_REFRESH_TOKEN** — новый refresh token (если пришёл в ответе; старый после обмена недействителен)
+
+Для защиты от параллельного refresh используется lock-файл `.vk_refresh.lock`.
+Опционально в `.env`:
+
+```dotenv
+VK_REFRESH_LOCK_WAIT_SEC=30
+```
 
 ## Пайплайны
 

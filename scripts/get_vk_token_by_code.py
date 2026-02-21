@@ -20,8 +20,10 @@ import os
 import random
 import string
 import sys
+import threading
 from pathlib import Path
 from urllib.parse import urlparse, urlencode, parse_qs
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # Корень проекта
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -91,7 +93,7 @@ def save_env(env: dict[str, str]) -> None:
                         written.add(key)
                         continue
                 new_lines.append(line)
-    for key in ["VK_REFRESH_TOKEN", "VK_USER_TOKEN_EXPIRES_AT", "VK_USER_ID", "VK_ACCESS_TOKEN", "VK_GROUP_ID"]:
+    for key in ["VK_REFRESH_TOKEN", "VK_USER_TOKEN_EXPIRES_AT", "VK_USER_ID", "VK_ACCESS_TOKEN", "VK_GROUP_ID", "VK_DEVICE_ID"]:
         if key in env and key not in written:
             val = env[key]
             if "\n" in val or "\r" in val:
@@ -111,6 +113,60 @@ def pkce_code_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("utf-8")
 
 
+def get_int_env(env: dict[str, str], key: str, default: int) -> int:
+    raw = get_stripped(env, key)
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def wait_for_local_callback(state: str, port: int, timeout_sec: int) -> dict[str, str]:
+    """Поднять локальный listener и дождаться redirect с code/state/device_id."""
+    result: dict[str, str] = {}
+    done = threading.Event()
+
+    class CallbackHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            parsed = urlparse(self.path)
+            if parsed.path != "/callback":
+                self.send_response(404)
+                self.end_headers()
+                return
+
+            params = {k: (v[0] if v else "") for k, v in parse_qs(parsed.query).items()}
+            result.update(params)
+            done.set()
+
+            body = (
+                "<html><head><meta charset='utf-8'><title>VK Auth</title></head>"
+                "<body><p>Авторизация завершена, вкладку можно закрыть.</p></body></html>"
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format, *args):  # noqa: A003
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", port), CallbackHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        if not done.wait(timeout_sec):
+            return {}
+        if result.get("state", "") != state:
+            return {"_error": "state_mismatch"}
+        return result
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def main():
     env = load_env()
     # Чтобы vk_token_refresh видел VK_SSL_VERIFY (для отключения проверки SSL)
@@ -127,6 +183,9 @@ def main():
     use_classic = (get_stripped(env, "VK_OAUTH_ENDPOINT") or "classic").strip().lower() == "classic"
     state = "".join(random.choices(string.ascii_letters + string.digits, k=32))
     scope = get_stripped(env, "VK_SCOPE") or ("groups,wall,video" if use_classic else "video,offline")
+    local_callback_port = get_int_env(env, "VK_LOCAL_CALLBACK_PORT", 53682)
+    local_callback_timeout = get_int_env(env, "VK_LOCAL_CALLBACK_TIMEOUT_SEC", 180)
+    auto_capture = (get_stripped(env, "VK_AUTO_CAPTURE_CODE") or "1").strip().lower() not in ("0", "false", "no", "off")
 
     if use_classic:
         # Классический OAuth (oauth.vk.com): без PKCE, с display и v
@@ -161,16 +220,31 @@ def main():
     print(f"Открываю браузер для авторизации ({oauth_label})...")
     webbrowser.open(auth_url)
     print()
-    print("После входа вас перенаправит на страницу с пустым адресом (например oauth.vk.com/blank.html).")
-    print("Скопируйте ПОЛНЫЙ URL из адресной строки браузера и вставьте сюда.")
-    print()
-    try:
-        pasted = input("Вставьте URL редиректа: ").strip()
-    except (EOFError, KeyboardInterrupt):
-        print("Прервано.", file=sys.stderr)
-        sys.exit(1)
+    params = {}
+    if (not use_classic) and auto_capture:
+        print(f"Жду callback на http://127.0.0.1:{local_callback_port}/callback (таймаут {local_callback_timeout} сек)...")
+        print("Если не сработает, будет fallback на ручную вставку URL.")
+        print()
+        try:
+            params = wait_for_local_callback(state, local_callback_port, local_callback_timeout)
+            if params.get("_error") == "state_mismatch":
+                print("state в callback не совпал. Возможна подмена.", file=sys.stderr)
+                sys.exit(1)
+        except OSError as e:
+            print(f"Не удалось запустить локальный callback listener: {e}", file=sys.stderr)
+            params = {}
 
-    params = _params_from_url(pasted)
+    if not params:
+        print("После входа вас перенаправит на страницу с параметрами авторизации.")
+        print("Скопируйте ПОЛНЫЙ URL из адресной строки браузера и вставьте сюда.")
+        print()
+        try:
+            pasted = input("Вставьте URL редиректа: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("Прервано.", file=sys.stderr)
+            sys.exit(1)
+        params = _params_from_url(pasted)
+
     code = params.get("code") or ""
     state_back = params.get("state") or ""
     if not code:
@@ -223,10 +297,12 @@ def main():
     env["VK_ACCESS_TOKEN"] = access_token
     env["VK_USER_TOKEN_EXPIRES_AT"] = str(int(time.time()) + int(expires_in))
     env["VK_USER_ID"] = str(data.get("user_id") or "")
+    if not use_classic and device_id:
+        env["VK_DEVICE_ID"] = device_id
     if refresh_token:
         env["VK_REFRESH_TOKEN"] = refresh_token
     save_env(env)
-    print("Токены записаны в .env: VK_ACCESS_TOKEN, VK_USER_TOKEN_EXPIRES_AT, VK_USER_ID, VK_REFRESH_TOKEN.")
+    print("Токены записаны в .env: VK_ACCESS_TOKEN, VK_USER_TOKEN_EXPIRES_AT, VK_USER_ID, VK_REFRESH_TOKEN, VK_DEVICE_ID.")
 
 
 if __name__ == "__main__":

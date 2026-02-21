@@ -24,7 +24,6 @@ from urllib.error import HTTPError
 
 # Корень проекта
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-import sys
 sys.path.insert(0, str(PROJECT_ROOT))
 from src.utils.vk_token_refresh import refresh_token_request
 
@@ -32,6 +31,8 @@ ENV_PATH = PROJECT_ROOT / ".env"
 
 # Порог: обновлять, если до истечения меньше N минут
 DEFAULT_EXPIRES_WITHIN_MINUTES = 60
+DEFAULT_LOCK_WAIT_SECONDS = 30
+LOCK_POLL_INTERVAL_SECONDS = 0.2
 
 
 def load_env() -> dict[str, str]:
@@ -69,7 +70,7 @@ def save_env(env: dict[str, str]) -> None:
                 new_lines.append(line)
     append_order = [
         "VK_REFRESH_TOKEN", "VK_USER_TOKEN_EXPIRES_AT", "VK_USER_ID",
-        "VK_ACCESS_TOKEN", "VK_GROUP_ID",
+        "VK_ACCESS_TOKEN", "VK_GROUP_ID", "VK_DEVICE_ID",
     ]
     for key in append_order:
         if key in env and key not in written:
@@ -89,6 +90,40 @@ def get_stripped(env: dict[str, str], key: str) -> str:
     elif v.startswith("'") and v.endswith("'"):
         v = v[1:-1]
     return v
+
+
+def get_int_env(env: dict[str, str], key: str, default: int) -> int:
+    raw = get_stripped(env, key)
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def acquire_lock(lock_path: Path, wait_seconds: int) -> int:
+    """Взять lock через атомарное создание файла."""
+    deadline = time.time() + max(0, wait_seconds)
+    while True:
+        try:
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode("utf-8"))
+            return fd
+        except FileExistsError:
+            if time.time() >= deadline:
+                raise TimeoutError(f"Не удалось взять lock {lock_path} за {wait_seconds} сек.")
+            time.sleep(LOCK_POLL_INTERVAL_SECONDS)
+
+
+def release_lock(fd: int, lock_path: Path) -> None:
+    try:
+        os.close(fd)
+    finally:
+        try:
+            lock_path.unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 
@@ -117,59 +152,78 @@ def main():
     args = parser.parse_args()
 
     env = load_env()
-    if "VK_SSL_VERIFY" in env:
-        os.environ["VK_SSL_VERIFY"] = get_stripped(env, "VK_SSL_VERIFY")
-
-    client_id = get_stripped(env, "VK_CLIENT_ID")
-    client_secret = get_stripped(env, "VK_CLIENT_SECRET")
-    refresh_tok = get_stripped(env, "VK_REFRESH_TOKEN")
-    expires_at = get_stripped(env, "VK_USER_TOKEN_EXPIRES_AT")
-
-    if not client_id or not client_secret:
-        print("Ошибка: в .env должны быть заданы VK_CLIENT_ID и VK_CLIENT_SECRET.", file=sys.stderr)
+    lock_wait_seconds = get_int_env(env, "VK_REFRESH_LOCK_WAIT_SEC", DEFAULT_LOCK_WAIT_SECONDS)
+    lock_path = PROJECT_ROOT / ".vk_refresh.lock"
+    try:
+        lock_fd = acquire_lock(lock_path, lock_wait_seconds)
+    except TimeoutError as e:
+        print(str(e), file=sys.stderr)
         sys.exit(1)
-
-    if not refresh_tok:
-        print(
-            "VK_REFRESH_TOKEN не задан. Получите refresh_token один раз через OAuth VK ID\n"
-            "(authorization code flow), затем добавьте в .env строку VK_REFRESH_TOKEN=...\n"
-            "После этого скрипт сможет автоматически обновлять access_token.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    if not args.force and not is_token_expiring_soon(expires_at, args.expires_within):
-        print("Токен ещё действителен, обновление не требуется.")
-        return
 
     try:
-        data = refresh_token_request(client_id, client_secret, refresh_tok)
-    except HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        print(f"Ошибка VK ID: {e.code} — {body}", file=sys.stderr)
-        sys.exit(1)
-    except Exception as e:
-        print(f"Ошибка запроса: {e}", file=sys.stderr)
-        sys.exit(1)
+        if "VK_SSL_VERIFY" in env:
+            os.environ["VK_SSL_VERIFY"] = get_stripped(env, "VK_SSL_VERIFY")
 
-    access_token = data.get("access_token")
-    new_refresh = data.get("refresh_token")
-    expires_in = data.get("expires_in", 3600)
-    user_id = data.get("user_id", "")
+        client_id = get_stripped(env, "VK_CLIENT_ID")
+        client_secret = get_stripped(env, "VK_CLIENT_SECRET")
+        refresh_tok = get_stripped(env, "VK_REFRESH_TOKEN")
+        device_id = get_stripped(env, "VK_DEVICE_ID")
+        expires_at = get_stripped(env, "VK_USER_TOKEN_EXPIRES_AT")
 
-    if not access_token:
-        print("В ответе VK нет access_token.", file=sys.stderr)
-        sys.exit(1)
+        if not client_id or not client_secret:
+            print("Ошибка: в .env должны быть заданы VK_CLIENT_ID и VK_CLIENT_SECRET.", file=sys.stderr)
+            sys.exit(1)
 
-    expires_at_new = str(int(time.time()) + int(expires_in))
-    env["VK_ACCESS_TOKEN"] = access_token
-    env["VK_USER_TOKEN_EXPIRES_AT"] = expires_at_new
-    env["VK_USER_ID"] = str(user_id) if user_id else env.get("VK_USER_ID", "")
-    if new_refresh:
-        env["VK_REFRESH_TOKEN"] = new_refresh
+        if not refresh_tok:
+            print(
+                "VK_REFRESH_TOKEN не задан. Получите refresh_token один раз через OAuth VK ID\n"
+                "(authorization code flow), затем добавьте в .env строку VK_REFRESH_TOKEN=...\n"
+                "После этого скрипт сможет автоматически обновлять access_token.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if not device_id:
+            print(
+                "VK_DEVICE_ID не задан. Выполните повторно python scripts/get_vk_token_by_code.py\n"
+                "через VK ID flow, чтобы сохранить device_id в .env.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
-    save_env(env)
-    print("Токен обновлён и записан в .env (VK_ACCESS_TOKEN, VK_USER_TOKEN_EXPIRES_AT, VK_USER_ID).")
+        if not args.force and not is_token_expiring_soon(expires_at, args.expires_within):
+            print("Токен ещё действителен, обновление не требуется.")
+            return
+
+        try:
+            data = refresh_token_request(client_id, client_secret, refresh_tok, device_id)
+        except HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            print(f"Ошибка VK ID: {e.code} — {body}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as e:
+            print(f"Ошибка запроса: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        access_token = data.get("access_token")
+        new_refresh = data.get("refresh_token")
+        expires_in = data.get("expires_in", 3600)
+        user_id = data.get("user_id", "")
+
+        if not access_token:
+            print("В ответе VK нет access_token.", file=sys.stderr)
+            sys.exit(1)
+
+        expires_at_new = str(int(time.time()) + int(expires_in))
+        env["VK_ACCESS_TOKEN"] = access_token
+        env["VK_USER_TOKEN_EXPIRES_AT"] = expires_at_new
+        env["VK_USER_ID"] = str(user_id) if user_id else env.get("VK_USER_ID", "")
+        if new_refresh:
+            env["VK_REFRESH_TOKEN"] = new_refresh
+
+        save_env(env)
+        print("Токен обновлён и записан в .env (VK_ACCESS_TOKEN, VK_USER_TOKEN_EXPIRES_AT, VK_USER_ID).")
+    finally:
+        release_lock(lock_fd, lock_path)
 
 
 if __name__ == "__main__":

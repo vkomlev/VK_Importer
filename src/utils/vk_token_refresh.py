@@ -84,6 +84,7 @@ def refresh_token_request(
     client_id: str,
     client_secret: str,
     refresh_token: str,
+    device_id: str,
 ) -> dict:
     """Обмен refresh_token на новую пару access_token и refresh_token."""
     body = urlencode({
@@ -91,6 +92,7 @@ def refresh_token_request(
         "refresh_token": refresh_token,
         "client_id": client_id,
         "client_secret": client_secret,
+        "device_id": device_id,
     }).encode("utf-8")
     req = Request(
         VK_ID_TOKEN_URL,

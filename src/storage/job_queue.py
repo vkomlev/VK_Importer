@@ -61,8 +61,9 @@ class JobQueue:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_run_after ON jobs(run_after)")
         try:
             cursor.execute("ALTER TABLE jobs ADD COLUMN result_json TEXT")
-        except sqlite3.OperationalError:
-            pass
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
         conn.commit()
         conn.close()
 

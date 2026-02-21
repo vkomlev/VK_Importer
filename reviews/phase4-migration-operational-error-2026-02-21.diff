@@ -1,0 +1,16 @@
+﻿diff --git a/src/storage/job_queue.py b/src/storage/job_queue.py
+index 30b2d45..1e95439 100644
+--- a/src/storage/job_queue.py
++++ b/src/storage/job_queue.py
+@@ -61,8 +61,9 @@ class JobQueue:
+         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_run_after ON jobs(run_after)")
+         try:
+             cursor.execute("ALTER TABLE jobs ADD COLUMN result_json TEXT")
+-        except sqlite3.OperationalError:
+-            pass
++        except sqlite3.OperationalError as e:
++            if "duplicate column" not in str(e).lower():
++                raise
+         conn.commit()
+         conn.close()
+ 

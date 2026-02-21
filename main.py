@@ -21,12 +21,15 @@ if sys.platform == 'win32':
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 from src.storage.database import VideoStorage, VideoRecord
+from src.storage.job_queue import JobQueue, JobRecord
 from src.storage.scanner import VideoScanner
 from src.title_generators.factory import TitleGeneratorFactory
 from src.publisher.vk_publisher import VKPublisher
 from src.utils.env_utils import get_env_var
 from src.models.video import VideoData
+from src.models.content import ContentItem
 from src.app_context import get_vk_publisher, FatalUploadError
+from src.adapters import VKDestinationAdapter
 from src.config.registry import COURSE_TYPES, CHANNEL_TO_TITLE_GENERATOR
 from src.config.source_registry import get_export_paths
 
@@ -61,6 +64,10 @@ SUMMARY_FILE = Path("logs/last_summary.json")
 
 # Сообщение об операционной неудаче публикации (publish вернул None) — для upload-one даёт EXIT_PARTIAL, не EXIT_FATAL
 UPLOAD_ERROR_PUBLISH_FAILED = "Ошибка загрузки"
+# Коды ошибок адаптера и legacy: операционный провал публикации одного элемента → EXIT_PARTIAL (Phase 3 / Phase 1)
+PARTIAL_UPLOAD_ERROR_CODES = frozenset({
+    "PUBLISH_FAILED", "NO_VIDEO", UPLOAD_ERROR_PUBLISH_FAILED,
+})
 
 
 def write_summary(
@@ -451,8 +458,8 @@ def upload_one(video_id: int, delay: float, max_retries: int):
     uploaded = bool(record and record.video_url)
     stats = {"uploaded": uploaded, "video_id": video_id, "video_url": (record.video_url or "") if record else ""}
     if not ok and err:
-        # Операционная неудача публикации (publish -> None) = partial; конфиг/инициализация = fatal
-        exit_code = EXIT_PARTIAL if err == UPLOAD_ERROR_PUBLISH_FAILED else EXIT_FATAL
+        # Операционная неудача публикации (publish -> None, NO_VIDEO и т.д.) = partial; конфиг/инициализация = fatal
+        exit_code = EXIT_PARTIAL if err in PARTIAL_UPLOAD_ERROR_CODES else EXIT_FATAL
         write_summary("upload-one", exit_code, stats, [], [err])
         sys.exit(exit_code)
     write_summary("upload-one", EXIT_SUCCESS, stats, [], [])
@@ -673,7 +680,7 @@ def update_vk_titles(ids_file: str, delay: float):
 
 
 def _upload_video(record: VideoRecord, storage: VideoStorage, delay: float, max_retries: int) -> tuple[bool, Optional[str]]:
-    """Загрузить одно видео. Возвращает (успех, сообщение_об_ошибке или None). При skip_upload загрузка не выполняется — (False, None)."""
+    """Загрузить одно видео через DestinationAdapter. Возвращает (успех, сообщение_об_ошибке или None). При skip_upload загрузка не выполняется — (False, None)."""
     if getattr(record, "skip_upload", False):
         click.echo("Пропуск: запись помечена для пропуска загрузки (skip).")
         return (False, None)
@@ -683,30 +690,31 @@ def _upload_video(record: VideoRecord, storage: VideoStorage, delay: float, max_
         click.echo(f"ОШИБКА: {e.message}", err=True)
         return (False, e.message)
 
-    video_data = VideoData(
-        file_path=Path(record.file_path),
+    adapter = VKDestinationAdapter(publisher)
+    item = ContentItem.from_video_record(
+        file_path=record.file_path,
         title=record.title,
-        description=record.description,
-        date=record.date,
+        description=record.description or "",
         channel=record.channel,
+        source_folder=record.source_folder,
+        date=record.date,
+        record_id=record.id,
     )
-    video_url = publisher.publish(video_data)
-    post_url = getattr(video_data, '_post_url', None)
+    result = adapter.publish(item)
 
-    if video_url:
-        storage.mark_uploaded(record.id, video_url, post_url=post_url)
-        click.echo(f"✓ Видео {record.id} успешно загружено: {video_url}")
-        if post_url:
-            click.echo(f"  Пост на стене: {post_url}")
+    if result.ok and result.remote_url:
+        storage.mark_uploaded(record.id, result.remote_url, post_url=None)
+        click.echo(f"✓ Видео {record.id} успешно загружено: {result.remote_url}")
         return (True, None)
-    storage.mark_uploaded(record.id, "", error=UPLOAD_ERROR_PUBLISH_FAILED)
+    storage.mark_uploaded(record.id, "", error=result.error_code or UPLOAD_ERROR_PUBLISH_FAILED)
     click.echo(f"✗ Ошибка загрузки видео {record.id}")
-    return (False, UPLOAD_ERROR_PUBLISH_FAILED)
+    return (False, result.error_code or UPLOAD_ERROR_PUBLISH_FAILED)
 
 
 def _upload_batch(records: list[VideoRecord], storage: VideoStorage, delay: float, max_retries: int) -> tuple[int, int, int]:
-    """Загрузить пакет видео. Возвращает (successful, failed, skipped). При ошибке окружения выбрасывает FatalUploadError."""
+    """Загрузить пакет видео через DestinationAdapter. Возвращает (successful, failed, skipped). При ошибке окружения выбрасывает FatalUploadError."""
     publisher = get_vk_publisher(delay, max_retries, group_id_required=True, on_token_expired=_refresh_vk_token_callback)
+    adapter = VKDestinationAdapter(publisher)
     successful = 0
     failed = 0
     skipped = 0
@@ -717,29 +725,27 @@ def _upload_batch(records: list[VideoRecord], storage: VideoStorage, delay: floa
             skipped += 1
             continue
         click.echo(f"\n[{idx}/{len(records)}] Загрузка видео ID {record.id}: {Path(record.file_path).name}")
-        
-        video_data = VideoData(
-            file_path=Path(record.file_path),
+
+        item = ContentItem.from_video_record(
+            file_path=record.file_path,
             title=record.title,
-            description=record.description,
-            date=record.date,
+            description=record.description or "",
             channel=record.channel,
+            source_folder=record.source_folder,
+            date=record.date,
+            record_id=record.id,
         )
-        
-        video_url = publisher.publish(video_data)
-        post_url = getattr(video_data, '_post_url', None)
-        
-        if video_url:
-            storage.mark_uploaded(record.id, video_url, post_url=post_url)
+        result = adapter.publish(item)
+
+        if result.ok and result.remote_url:
+            storage.mark_uploaded(record.id, result.remote_url, post_url=None)
             successful += 1
-            click.echo(f"✓ Успешно: {video_url}")
-            if post_url:
-                click.echo(f"  Пост: {post_url}")
+            click.echo(f"✓ Успешно: {result.remote_url}")
         else:
-            storage.mark_uploaded(record.id, "", error=UPLOAD_ERROR_PUBLISH_FAILED)
+            storage.mark_uploaded(record.id, "", error=result.error_code or UPLOAD_ERROR_PUBLISH_FAILED)
             failed += 1
             click.echo(f"✗ Ошибка загрузки")
-        
+
         # Задержка между загрузками (кроме последнего видео)
         if idx < len(records):
             click.echo(f"Ожидание {delay} сек перед следующей загрузкой...")
@@ -754,6 +760,77 @@ def _upload_batch(records: list[VideoRecord], storage: VideoStorage, delay: floa
         click.echo(f"Пропущено (skip): {skipped}")
     click.echo(f"Всего: {len(records)}")
     return (successful, failed, skipped)
+
+
+# --- Phase 4: worker для очереди задач ---
+
+JOB_TYPE_UPLOAD_VIDEO = "upload_video"
+
+
+def _run_job(job: JobRecord, queue: JobQueue, storage: VideoStorage) -> None:
+    """Выполнить одну задачу; по результату вызвать complete/fail_retry/fail."""
+    if job.type == JOB_TYPE_UPLOAD_VIDEO:
+        payload = job.payload()
+        video_id = payload.get("video_id")
+        if video_id is None:
+            queue.fail(job.id, "payload.video_id отсутствует")
+            return
+        record = storage.get_video(video_id)
+        if not record:
+            queue.fail(job.id, f"Видео с ID {video_id} не найдено")
+            return
+        if record.uploaded:
+            queue.complete(job.id, {"uploaded": True, "video_url": record.video_url})
+            return
+        try:
+            ok, err = _upload_video(record, storage, DEFAULT_UPLOAD_DELAY, 3)
+            if ok:
+                queue.complete(job.id, {"uploaded": True})
+            elif err and err in PARTIAL_UPLOAD_ERROR_CODES:
+                from datetime import timedelta
+                run_after = datetime.now(timezone.utc) + timedelta(minutes=5)
+                queue.fail_retry(job.id, err or "publish failed", run_after=run_after)
+            else:
+                queue.fail(job.id, err or "unknown")
+        except FatalUploadError as e:
+            queue.fail(job.id, e.message)
+    else:
+        queue.fail(job.id, f"Неизвестный тип задачи: {job.type}")
+
+
+@cli.command()
+@click.option("--once", is_flag=True, help="Взять одну задачу и выйти")
+@click.option("--loop", is_flag=True, help="Цикл: брать задачи с паузой до прерывания")
+@click.option("--interval", "-i", type=float, default=10.0, help="Пауза между опросами очереди (сек) в --loop")
+@click.option("--types", "-t", multiple=True, default=[JOB_TYPE_UPLOAD_VIDEO], help="Типы задач (можно несколько)")
+def worker(once: bool, loop: bool, interval: float, types: tuple):
+    """Воркер очереди задач: обрабатывает задачи из таблицы jobs (Phase 4)."""
+    if not once and not loop:
+        click.echo("Укажите --once или --loop.", err=True)
+        write_summary("worker", EXIT_FATAL, {}, [], ["Укажите --once или --loop"])
+        sys.exit(EXIT_FATAL)
+    queue = JobQueue(Path("videos.db"))
+    types_list = list(types) if types else [JOB_TYPE_UPLOAD_VIDEO]
+    processed = 0
+    try:
+        while True:
+            job = queue.claim_next(job_types=types_list)
+            if not job:
+                if once:
+                    break
+                time.sleep(interval)
+                continue
+            storage = get_storage()
+            _run_job(job, queue, storage)
+            processed += 1
+            if once:
+                break
+    except (KeyboardInterrupt, click.Abort):
+        click.echo("\nВоркер прерван.", err=True)
+        write_summary("worker", EXIT_INTERRUPTED, {"processed": processed}, [], [])
+        sys.exit(EXIT_INTERRUPTED)
+    write_summary("worker", EXIT_SUCCESS, {"processed": processed}, [], [])
+    click.echo(f"Обработано задач: {processed}")
 
 
 if __name__ == "__main__":

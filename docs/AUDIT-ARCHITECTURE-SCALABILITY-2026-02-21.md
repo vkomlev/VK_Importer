@@ -186,13 +186,15 @@
 - Убрать дубли по env/publisher init.
 - Централизовать mappings + source registry.
 
-**Phase 3 (4-7 дней):**
+**Phase 3 (4-7 дней):** ✅ реализован
 - Ввести `ContentItem` и adapters interface.
 - Переиспользовать текущие TG parser + VK publisher как первые адаптеры.
 - Подготовить skeleton для 1 нового destination (например YouTube stub).
+- См. `src/models/content.py`, `src/adapters/`, `docs/PHASE3-ADAPTERS.md`.
 
-**Phase 4 (опционально):**
-- Нормализованная очередь задач (SQLite job table/Redis later).
+**Phase 4 (реализован):**
+- Нормализованная очередь задач: таблица `jobs` в SQLite, контракт API в коде (`enqueue`, `claim_next`, `complete`, `fail_retry`), воркер `python main.py worker --once|--loop`.
+- Тип задач `upload_video`; док с контрактом и правилами миграции на Redis — `docs/PHASE4-JOB-QUEUE.md`, `src/storage/job_queue.py`.
 - Только после роста нагрузки — обсуждать физическое разделение сервисов.
 
 ---

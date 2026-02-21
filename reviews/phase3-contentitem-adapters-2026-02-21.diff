@@ -1,0 +1,568 @@
+﻿diff --git a/docs/AUDIT-ARCHITECTURE-SCALABILITY-2026-02-21.md b/docs/AUDIT-ARCHITECTURE-SCALABILITY-2026-02-21.md
+index 06a0969..e973f98 100644
+--- a/docs/AUDIT-ARCHITECTURE-SCALABILITY-2026-02-21.md
++++ b/docs/AUDIT-ARCHITECTURE-SCALABILITY-2026-02-21.md
+@@ -186,10 +186,11 @@
+ - ╨г╨▒╤А╨░╤В╤М ╨┤╤Г╨▒╨╗╨╕ ╨┐╨╛ env/publisher init.
+ - ╨ж╨╡╨╜╤В╤А╨░╨╗╨╕╨╖╨╛╨▓╨░╤В╤М mappings + source registry.
+ 
+-**Phase 3 (4-7 ╨┤╨╜╨╡╨╣):**
++**Phase 3 (4-7 ╨┤╨╜╨╡╨╣):** тЬЕ ╤А╨╡╨░╨╗╨╕╨╖╨╛╨▓╨░╨╜
+ - ╨Т╨▓╨╡╤Б╤В╨╕ `ContentItem` ╨╕ adapters interface.
+ - ╨Я╨╡╤А╨╡╨╕╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╤М ╤В╨╡╨║╤Г╤Й╨╕╨╡ TG parser + VK publisher ╨║╨░╨║ ╨┐╨╡╤А╨▓╤Л╨╡ ╨░╨┤╨░╨┐╤В╨╡╤А╤Л.
+ - ╨Я╨╛╨┤╨│╨╛╤В╨╛╨▓╨╕╤В╤М skeleton ╨┤╨╗╤П 1 ╨╜╨╛╨▓╨╛╨│╨╛ destination (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А YouTube stub).
++- ╨б╨╝. `src/models/content.py`, `src/adapters/`, `docs/PHASE3-ADAPTERS.md`.
+ 
+ **Phase 4 (╨╛╨┐╤Ж╨╕╨╛╨╜╨░╨╗╤М╨╜╨╛):**
+ - ╨Э╨╛╤А╨╝╨░╨╗╨╕╨╖╨╛╨▓╨░╨╜╨╜╨░╤П ╨╛╤З╨╡╤А╨╡╨┤╤М ╨╖╨░╨┤╨░╤З (SQLite job table/Redis later).
+diff --git a/docs/PHASE3-ADAPTERS.md b/docs/PHASE3-ADAPTERS.md
+new file mode 100644
+index 0000000..9efaa63
+--- /dev/null
++++ b/docs/PHASE3-ADAPTERS.md
+@@ -0,0 +1,52 @@
++# Phase 3: ContentItem ╨╕ ╨░╨┤╨░╨┐╤В╨╡╤А╤Л
++
++**╨Ф╨░╤В╨░:** 2026-02-21  
++**╨Ъ╨╛╨╜╤В╨╡╨║╤Б╤В:** ╨Р╤Г╨┤╨╕╤В ╨░╤А╤Е╨╕╤В╨╡╨║╤В╤Г╤А╤Л (AUDIT-ARCHITECTURE-SCALABILITY-2026-02-21.md), Phase 3 тАФ ╤Г╨╜╨╕╤Д╨╕╤Ж╨╕╤А╨╛╨▓╨░╨╜╨╜╨░╤П ╨┤╨╛╨╝╨╡╨╜╨╜╨░╤П ╨╝╨╛╨┤╨╡╨╗╤М ╨╕ ╨║╨╛╨╜╤В╤А╨░╨║╤В╤Л Source/Destination.
++
++## ╨з╤В╨╛ ╤Б╨┤╨╡╨╗╨░╨╜╨╛
++
++### 1. ╨Ь╨╛╨┤╨╡╨╗╤М ╨║╨╛╨╜╤В╨╡╨╜╤В╨░ (`src/models/content.py`)
++
++- **ContentItem** тАФ ╨╡╨┤╨╕╨╜╨░╤П ╤Б╤Г╤Й╨╜╨╛╤Б╤В╤М ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕: `source`, `external_id`, `text`, `title`, `published_at`, `media[]`, `metadata`. ╨Ъ╨╛╨╜╨▓╨╡╤А╤В╨╡╤А╤Л:
++  - `from_video_record(...)` тАФ ╨╕╨╖ ╨╖╨░╨┐╨╕╤Б╨╕ ╨С╨Ф (╨┤╨╗╤П upload ╨╕╨╖ ╤В╨╡╨║╤Г╤Й╨╡╨│╨╛ pipeline).
++  - `from_video_data(...)` тАФ ╨╕╨╖ ╤А╨╡╨╖╤Г╨╗╤М╤В╨░╤В╨░ ╨┐╨░╤А╤Б╨╡╤А╨╛╨▓.
++  - `to_video_data()` тАФ ╨▓ VideoData ╨┤╨╗╤П VK (╨┐╨╡╤А╨▓╨╛╨╡ ╨▓╨╕╨┤╨╡╨╛ ╨╕╨╖ `media`).
++- **MediaRef** тАФ ╤В╨╕╨┐ + path/url ╨┤╨╗╤П ╨╝╨╡╨┤╨╕╨░.
++- **PublicationResult** тАФ ╤А╨╡╨╖╤Г╨╗╤М╤В╨░╤В ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕: `destination`, `ok`, `remote_url`, `error_code`, `retry_count`.
++
++### 2. ╨Ш╨╜╤В╨╡╤А╤Д╨╡╨╣╤Б╤Л ╨░╨┤╨░╨┐╤В╨╡╤А╨╛╨▓ (`src/adapters/base.py`)
++
++- **SourceAdapter** тАФ `source_id`, `fetch(**options) -> List[ContentItem]`.
++- **DestinationAdapter** тАФ `destination_id`, `publish(item: ContentItem, **options) -> PublicationResult`.
++
++### 3. ╨а╨╡╨░╨╗╨╕╨╖╨░╤Ж╨╕╨╕
++
++- **VKDestinationAdapter** (`src/adapters/destinations/vk.py`) тАФ ╨╛╨▒╤С╤А╤В╨║╨░ ╨╜╨░╨┤ `VKPublisher`: ╨┐╤А╨╕╨╜╨╕╨╝╨░╨╡╤В `ContentItem`, ╨║╨╛╨╜╨▓╨╡╤А╤В╨╕╤А╤Г╨╡╤В ╨▓ `VideoData`, ╨▓╤Л╨╖╤Л╨▓╨░╨╡╤В `publish()`, ╨▓╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╤В `PublicationResult`. ╨Я╨╛╨┤╨║╨╗╤О╤З╤С╨╜ ╨▓ `main.py`: ╨╖╨░╨│╤А╤Г╨╖╨║╨░ (upload-one, upload-next, upload-range, upload-many, upload-all) ╨╕╨┤╤С╤В ╤З╨╡╤А╨╡╨╖ ╨░╨┤╨░╨┐╤В╨╡╤А.
++- **YouTubeDestinationAdapter** (`src/adapters/destinations/youtube_stub.py`) тАФ ╨╖╨░╨│╨╗╤Г╤И╨║╨░: `publish()` ╨▓╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╤В `ok=False`, `error_code="NOT_IMPLEMENTED"`.
++- **ExportFilesystemSourceAdapter** (`src/adapters/sources/export_fs.py`) тАФ ╨╕╤Б╤В╨╛╤З╨╜╨╕╨║ ┬л╤Н╨║╤Б╨┐╨╛╤А╤В╤Л ╨╜╨░ ╨┤╨╕╤Б╨║╨╡┬╗: ╨╕╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╤В `get_export_paths`, ╤В╨╡ ╨╢╨╡ ╨┐╨░╤А╤Б╨╡╤А╤Л (HTML/JSON/Custom) ╨╕ ╨│╨╡╨╜╨╡╤А╨░╤В╨╛╤А╤Л ╨╖╨░╨│╨╛╨╗╨╛╨▓╨║╨╛╨▓, ╨▓╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╤В `List[ContentItem]`. ╨Ю╨┐╤Ж╨╕╨╛╨╜╨░╨╗╤М╨╜╨╛ ╨┐╤А╨╕╨╜╨╕╨╝╨░╨╡╤В `storage` ╨┤╨╗╤П `get_course_for_folder`. ╨Я╨╛╨║╨░ ╨╜╨╡ ╨▓╤Б╤В╤А╨╛╨╡╨╜ ╨▓ ╨║╨╛╨╝╨░╨╜╨┤╤Г `scan` (scan ╨┐╨╛-╨┐╤А╨╡╨╢╨╜╨╡╨╝╤Г ╨┐╨╕╤И╨╡╤В ╨▓ ╨С╨Ф ╤З╨╡╤А╨╡╨╖ VideoScanner); ╨░╨┤╨░╨┐╤В╨╡╤А ╨╝╨╛╨╢╨╜╨╛ ╨╕╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╤М ╨┤╨╗╤П ╨▒╤Г╨┤╤Г╤Й╨╡╨│╨╛ pipeline ╨▒╨╡╨╖ ╨С╨Ф ╨╕╨╗╨╕ ╨┤╨╗╤П ╤В╨╡╤Б╤В╨╛╨▓.
++
++### 4. ╨Я╨╛╨▓╨╡╨┤╨╡╨╜╨╕╨╡ CLI
++
++- ╨в╨╡╨║╤Г╤Й╨╕╨╣ ╤Б╤Ж╨╡╨╜╨░╤А╨╕╨╣ ╨╜╨╡ ╨╝╨╡╨╜╤П╨╗╤Б╤П: scan тЖТ ╨С╨Ф тЖТ upload ╨┐╨╛ ╨╖╨░╨┐╨╕╤Б╤П╨╝. ╨Т upload ╨▓╨╝╨╡╤Б╤В╨╛ ╨┐╤А╤П╨╝╨╛╨│╨╛ ╨▓╤Л╨╖╨╛╨▓╨░ `VKPublisher.publish(video_data)` ╨╕╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╤В╤Б╤П `VKDestinationAdapter.publish(ContentItem.from_video_record(record))`.
++- ╨Ф╨╛╨▒╨░╨▓╨╗╨╡╨╜╨╕╨╡ ╨╜╨╛╨▓╨╛╨│╨╛ ╨╜╨░╨┐╤А╨░╨▓╨╗╨╡╨╜╨╕╤П (YouTube, Rutube ╨╕ ╤В.╨┤.) тАФ ╤А╨╡╨░╨╗╨╕╨╖╨╛╨▓╨░╤В╤М `DestinationAdapter` ╨╕ ╨┐╤А╨╕ ╨╜╨╡╨╛╨▒╤Е╨╛╨┤╨╕╨╝╨╛╤Б╤В╨╕ ╨▓╤Л╨▒╨╕╤А╨░╤В╤М ╨░╨┤╨░╨┐╤В╨╡╤А ╨┐╨╛ ╨║╨╛╨╜╤Д╨╕╨│╤Г/╨║╨╛╨╝╨░╨╜╨┤╨╡.
++
++## ╨б╤В╤А╤Г╨║╤В╤Г╤А╨░ ╤Д╨░╨╣╨╗╨╛╨▓
++
++```
++src/
++  models/
++    content.py       # ContentItem, PublicationResult, MediaRef
++  adapters/
++    base.py          # SourceAdapter, DestinationAdapter (ABC)
++    sources/
++      export_fs.py   # ExportFilesystemSourceAdapter
++    destinations/
++      vk.py          # VKDestinationAdapter
++      youtube_stub.py # YouTubeDestinationAdapter (stub)
++```
++
++## ╨Ф╨░╨╗╤М╨╜╨╡╨╣╤И╨╕╨╡ ╤И╨░╨│╨╕ (╨┐╤А╨╕ ╨╜╨╡╨╛╨▒╤Е╨╛╨┤╨╕╨╝╨╛╤Б╤В╨╕)
++
++- ╨Т╤Л╨▒╨╛╤А destination ╨┐╨╛ ╨║╨╛╨╜╤Д╨╕╨│╤Г ╨╕╨╗╨╕ ╤Д╨╗╨░╨│╤Г CLI (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А `--destination youtube`).
++- ╨Я╨╛╨┤╨║╨╗╤О╤З╨╡╨╜╨╕╨╡ ExportFilesystemSourceAdapter ╨▓ ╨╡╨┤╨╕╨╜╤Л╨╣ pipeline (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А ┬лfetch тЖТ normalize тЖТ store ╨╕╨╗╨╕ publish┬╗).
++- ╨а╨╡╨░╨╗╨╕╨╖╨░╤Ж╨╕╤П YouTube (╨╕╨╗╨╕ ╨┤╤А╤Г╨│╨╛╨│╨╛) destination ╨┐╨╛╨▓╨╡╤А╤Е API.
+diff --git a/main.py b/main.py
+index 17cf9ca..18889a0 100644
+--- a/main.py
++++ b/main.py
+@@ -26,7 +26,9 @@ from src.title_generators.factory import TitleGeneratorFactory
+ from src.publisher.vk_publisher import VKPublisher
+ from src.utils.env_utils import get_env_var
+ from src.models.video import VideoData
++from src.models.content import ContentItem
+ from src.app_context import get_vk_publisher, FatalUploadError
++from src.adapters import VKDestinationAdapter
+ from src.config.registry import COURSE_TYPES, CHANNEL_TO_TITLE_GENERATOR
+ from src.config.source_registry import get_export_paths
+ 
+@@ -673,7 +675,7 @@ def update_vk_titles(ids_file: str, delay: float):
+ 
+ 
+ def _upload_video(record: VideoRecord, storage: VideoStorage, delay: float, max_retries: int) -> tuple[bool, Optional[str]]:
+-    """╨Ч╨░╨│╤А╤Г╨╖╨╕╤В╤М ╨╛╨┤╨╜╨╛ ╨▓╨╕╨┤╨╡╨╛. ╨Т╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╤В (╤Г╤Б╨┐╨╡╤Е, ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╨╡_╨╛╨▒_╨╛╤И╨╕╨▒╨║╨╡ ╨╕╨╗╨╕ None). ╨Я╤А╨╕ skip_upload ╨╖╨░╨│╤А╤Г╨╖╨║╨░ ╨╜╨╡ ╨▓╤Л╨┐╨╛╨╗╨╜╤П╨╡╤В╤Б╤П тАФ (False, None)."""
++    """╨Ч╨░╨│╤А╤Г╨╖╨╕╤В╤М ╨╛╨┤╨╜╨╛ ╨▓╨╕╨┤╨╡╨╛ ╤З╨╡╤А╨╡╨╖ DestinationAdapter. ╨Т╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╤В (╤Г╤Б╨┐╨╡╤Е, ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╨╡_╨╛╨▒_╨╛╤И╨╕╨▒╨║╨╡ ╨╕╨╗╨╕ None). ╨Я╤А╨╕ skip_upload ╨╖╨░╨│╤А╤Г╨╖╨║╨░ ╨╜╨╡ ╨▓╤Л╨┐╨╛╨╗╨╜╤П╨╡╤В╤Б╤П тАФ (False, None)."""
+     if getattr(record, "skip_upload", False):
+         click.echo("╨Я╤А╨╛╨┐╤Г╤Б╨║: ╨╖╨░╨┐╨╕╤Б╤М ╨┐╨╛╨╝╨╡╤З╨╡╨╜╨░ ╨┤╨╗╤П ╨┐╤А╨╛╨┐╤Г╤Б╨║╨░ ╨╖╨░╨│╤А╤Г╨╖╨║╨╕ (skip).")
+         return (False, None)
+@@ -683,30 +685,31 @@ def _upload_video(record: VideoRecord, storage: VideoStorage, delay: float, max_
+         click.echo(f"╨Ю╨и╨Ш╨С╨Ъ╨Р: {e.message}", err=True)
+         return (False, e.message)
+ 
+-    video_data = VideoData(
+-        file_path=Path(record.file_path),
++    adapter = VKDestinationAdapter(publisher)
++    item = ContentItem.from_video_record(
++        file_path=record.file_path,
+         title=record.title,
+-        description=record.description,
+-        date=record.date,
++        description=record.description or "",
+         channel=record.channel,
++        source_folder=record.source_folder,
++        date=record.date,
++        record_id=record.id,
+     )
+-    video_url = publisher.publish(video_data)
+-    post_url = getattr(video_data, '_post_url', None)
+-
+-    if video_url:
+-        storage.mark_uploaded(record.id, video_url, post_url=post_url)
+-        click.echo(f"тЬУ ╨Т╨╕╨┤╨╡╨╛ {record.id} ╤Г╤Б╨┐╨╡╤И╨╜╨╛ ╨╖╨░╨│╤А╤Г╨╢╨╡╨╜╨╛: {video_url}")
+-        if post_url:
+-            click.echo(f"  ╨Я╨╛╤Б╤В ╨╜╨░ ╤Б╤В╨╡╨╜╨╡: {post_url}")
++    result = adapter.publish(item)
++
++    if result.ok and result.remote_url:
++        storage.mark_uploaded(record.id, result.remote_url, post_url=None)
++        click.echo(f"тЬУ ╨Т╨╕╨┤╨╡╨╛ {record.id} ╤Г╤Б╨┐╨╡╤И╨╜╨╛ ╨╖╨░╨│╤А╤Г╨╢╨╡╨╜╨╛: {result.remote_url}")
+         return (True, None)
+-    storage.mark_uploaded(record.id, "", error=UPLOAD_ERROR_PUBLISH_FAILED)
++    storage.mark_uploaded(record.id, "", error=result.error_code or UPLOAD_ERROR_PUBLISH_FAILED)
+     click.echo(f"тЬЧ ╨Ю╤И╨╕╨▒╨║╨░ ╨╖╨░╨│╤А╤Г╨╖╨║╨╕ ╨▓╨╕╨┤╨╡╨╛ {record.id}")
+-    return (False, UPLOAD_ERROR_PUBLISH_FAILED)
++    return (False, result.error_code or UPLOAD_ERROR_PUBLISH_FAILED)
+ 
+ 
+ def _upload_batch(records: list[VideoRecord], storage: VideoStorage, delay: float, max_retries: int) -> tuple[int, int, int]:
+-    """╨Ч╨░╨│╤А╤Г╨╖╨╕╤В╤М ╨┐╨░╨║╨╡╤В ╨▓╨╕╨┤╨╡╨╛. ╨Т╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╤В (successful, failed, skipped). ╨Я╤А╨╕ ╨╛╤И╨╕╨▒╨║╨╡ ╨╛╨║╤А╤Г╨╢╨╡╨╜╨╕╤П ╨▓╤Л╨▒╤А╨░╤Б╤Л╨▓╨░╨╡╤В FatalUploadError."""
++    """╨Ч╨░╨│╤А╤Г╨╖╨╕╤В╤М ╨┐╨░╨║╨╡╤В ╨▓╨╕╨┤╨╡╨╛ ╤З╨╡╤А╨╡╨╖ DestinationAdapter. ╨Т╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╤В (successful, failed, skipped). ╨Я╤А╨╕ ╨╛╤И╨╕╨▒╨║╨╡ ╨╛╨║╤А╤Г╨╢╨╡╨╜╨╕╤П ╨▓╤Л╨▒╤А╨░╤Б╤Л╨▓╨░╨╡╤В FatalUploadError."""
+     publisher = get_vk_publisher(delay, max_retries, group_id_required=True, on_token_expired=_refresh_vk_token_callback)
++    adapter = VKDestinationAdapter(publisher)
+     successful = 0
+     failed = 0
+     skipped = 0
+@@ -717,29 +720,27 @@ def _upload_batch(records: list[VideoRecord], storage: VideoStorage, delay: floa
+             skipped += 1
+             continue
+         click.echo(f"\n[{idx}/{len(records)}] ╨Ч╨░╨│╤А╤Г╨╖╨║╨░ ╨▓╨╕╨┤╨╡╨╛ ID {record.id}: {Path(record.file_path).name}")
+-        
+-        video_data = VideoData(
+-            file_path=Path(record.file_path),
++
++        item = ContentItem.from_video_record(
++            file_path=record.file_path,
+             title=record.title,
+-            description=record.description,
+-            date=record.date,
++            description=record.description or "",
+             channel=record.channel,
++            source_folder=record.source_folder,
++            date=record.date,
++            record_id=record.id,
+         )
+-        
+-        video_url = publisher.publish(video_data)
+-        post_url = getattr(video_data, '_post_url', None)
+-        
+-        if video_url:
+-            storage.mark_uploaded(record.id, video_url, post_url=post_url)
++        result = adapter.publish(item)
++
++        if result.ok and result.remote_url:
++            storage.mark_uploaded(record.id, result.remote_url, post_url=None)
+             successful += 1
+-            click.echo(f"тЬУ ╨г╤Б╨┐╨╡╤И╨╜╨╛: {video_url}")
+-            if post_url:
+-                click.echo(f"  ╨Я╨╛╤Б╤В: {post_url}")
++            click.echo(f"тЬУ ╨г╤Б╨┐╨╡╤И╨╜╨╛: {result.remote_url}")
+         else:
+-            storage.mark_uploaded(record.id, "", error=UPLOAD_ERROR_PUBLISH_FAILED)
++            storage.mark_uploaded(record.id, "", error=result.error_code or UPLOAD_ERROR_PUBLISH_FAILED)
+             failed += 1
+             click.echo(f"тЬЧ ╨Ю╤И╨╕╨▒╨║╨░ ╨╖╨░╨│╤А╤Г╨╖╨║╨╕")
+-        
++
+         # ╨Ч╨░╨┤╨╡╤А╨╢╨║╨░ ╨╝╨╡╨╢╨┤╤Г ╨╖╨░╨│╤А╤Г╨╖╨║╨░╨╝╨╕ (╨║╤А╨╛╨╝╨╡ ╨┐╨╛╤Б╨╗╨╡╨┤╨╜╨╡╨│╨╛ ╨▓╨╕╨┤╨╡╨╛)
+         if idx < len(records):
+             click.echo(f"╨Ю╨╢╨╕╨┤╨░╨╜╨╕╨╡ {delay} ╤Б╨╡╨║ ╨┐╨╡╤А╨╡╨┤ ╤Б╨╗╨╡╨┤╤Г╤О╤Й╨╡╨╣ ╨╖╨░╨│╤А╤Г╨╖╨║╨╛╨╣...")
+diff --git a/src/adapters/__init__.py b/src/adapters/__init__.py
+new file mode 100644
+index 0000000..0096653
+--- /dev/null
++++ b/src/adapters/__init__.py
+@@ -0,0 +1,13 @@
++"""╨Р╨┤╨░╨┐╤В╨╡╤А╤Л ╨╕╤Б╤В╨╛╤З╨╜╨╕╨║╨╛╨▓ ╨╕ ╨╜╨░╨┐╤А╨░╨▓╨╗╨╡╨╜╨╕╨╣ (Phase 3)."""
++
++from .base import SourceAdapter, DestinationAdapter
++from .sources import ExportFilesystemSourceAdapter
++from .destinations import VKDestinationAdapter, YouTubeDestinationAdapter
++
++__all__ = [
++    "SourceAdapter",
++    "DestinationAdapter",
++    "ExportFilesystemSourceAdapter",
++    "VKDestinationAdapter",
++    "YouTubeDestinationAdapter",
++]
+diff --git a/src/adapters/base.py b/src/adapters/base.py
+new file mode 100644
+index 0000000..31ad2a4
+--- /dev/null
++++ b/src/adapters/base.py
+@@ -0,0 +1,44 @@
++"""╨Ш╨╜╤В╨╡╤А╤Д╨╡╨╣╤Б╤Л ╨░╨┤╨░╨┐╤В╨╡╤А╨╛╨▓ ╨╕╤Б╤В╨╛╤З╨╜╨╕╨║╨╛╨▓ ╨╕ ╨╜╨░╨┐╤А╨░╨▓╨╗╨╡╨╜╨╕╨╣ (Phase 3)."""
++
++from abc import ABC, abstractmethod
++from typing import List
++
++from ..models.content import ContentItem, PublicationResult
++
++
++class SourceAdapter(ABC):
++    """╨Р╨┤╨░╨┐╤В╨╡╤А ╨╕╤Б╤В╨╛╤З╨╜╨╕╨║╨░ ╨║╨╛╨╜╤В╨╡╨╜╤В╨░ (TG export, RSS, VK source ╨╕ ╤В.╨┤.)."""
++
++    @property
++    @abstractmethod
++    def source_id(self) -> str:
++        """╨Ш╨┤╨╡╨╜╤В╨╕╤Д╨╕╨║╨░╤В╨╛╤А ╨╕╤Б╤В╨╛╤З╨╜╨╕╨║╨░ ╨┤╨╗╤П ╨╗╨╛╨│╨╛╨▓ ╨╕ ╨╝╨░╤А╤И╤А╤Г╤В╨╕╨╖╨░╤Ж╨╕╨╕."""
++        pass
++
++    @abstractmethod
++    def fetch(self, **options: object) -> List[ContentItem]:
++        """╨Я╨╛╨╗╤Г╤З╨╕╤В╤М ╤Б╨┐╨╕╤Б╨╛╨║ ╤Н╨╗╨╡╨╝╨╡╨╜╤В╨╛╨▓ ╨║╨╛╨╜╤В╨╡╨╜╤В╨░ ╨╕╨╖ ╨╕╤Б╤В╨╛╤З╨╜╨╕╨║╨░.
++
++        Returns:
++            ╨б╨┐╨╕╤Б╨╛╨║ ContentItem. ╨Я╤Г╤Б╤В╨╛╨╣ ╤Б╨┐╨╕╤Б╨╛╨║ ╨┐╤А╨╕ ╨╛╤В╤Б╤Г╤В╤Б╤В╨▓╨╕╨╕ ╨┤╨░╨╜╨╜╤Л╤Е.
++        """
++        pass
++
++
++class DestinationAdapter(ABC):
++    """╨Р╨┤╨░╨┐╤В╨╡╤А ╨╜╨░╨┐╤А╨░╨▓╨╗╨╡╨╜╨╕╤П ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕ (VK, YouTube, ╨Ф╨╖╨╡╨╜, WordPress ╨╕ ╤В.╨┤.)."""
++
++    @property
++    @abstractmethod
++    def destination_id(self) -> str:
++        """╨Ш╨┤╨╡╨╜╤В╨╕╤Д╨╕╨║╨░╤В╨╛╤А ╨╜╨░╨┐╤А╨░╨▓╨╗╨╡╨╜╨╕╤П (vk, youtube, rutube, ...)."""
++        pass
++
++    @abstractmethod
++    def publish(self, item: ContentItem, **options: object) -> PublicationResult:
++        """╨Ю╨┐╤Г╨▒╨╗╨╕╨║╨╛╨▓╨░╤В╤М ╤Н╨╗╨╡╨╝╨╡╨╜╤В ╨║╨╛╨╜╤В╨╡╨╜╤В╨░ ╨▓ ╨╜╨░╨┐╤А╨░╨▓╨╗╨╡╨╜╨╕╨╡.
++
++        Returns:
++            PublicationResult ╤Б remote_url ╨┐╤А╨╕ ╤Г╤Б╨┐╨╡╤Е╨╡ ╨╕╨╗╨╕ error_code ╨┐╤А╨╕ ╨╛╤И╨╕╨▒╨║╨╡.
++        """
++        pass
+diff --git a/src/adapters/destinations/__init__.py b/src/adapters/destinations/__init__.py
+new file mode 100644
+index 0000000..e3ce0f4
+--- /dev/null
++++ b/src/adapters/destinations/__init__.py
+@@ -0,0 +1,6 @@
++"""╨Р╨┤╨░╨┐╤В╨╡╤А╤Л ╨╜╨░╨┐╤А╨░╨▓╨╗╨╡╨╜╨╕╨╣ ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕."""
++
++from .vk import VKDestinationAdapter
++from .youtube_stub import YouTubeDestinationAdapter
++
++__all__ = ["VKDestinationAdapter", "YouTubeDestinationAdapter"]
+diff --git a/src/adapters/destinations/vk.py b/src/adapters/destinations/vk.py
+new file mode 100644
+index 0000000..fa9d4a2
+--- /dev/null
++++ b/src/adapters/destinations/vk.py
+@@ -0,0 +1,40 @@
++"""╨Р╨┤╨░╨┐╤В╨╡╤А ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕ ╨▓ VK Video (╨╛╨▒╤С╤А╤В╨║╨░ ╨╜╨░╨┤ VKPublisher)."""
++
++import logging
++from typing import TYPE_CHECKING
++
++from ..base import DestinationAdapter
++from ...models.content import ContentItem, PublicationResult
++
++if TYPE_CHECKING:
++    from ...publisher.vk_publisher import VKPublisher
++
++logger = logging.getLogger(__name__)
++
++
++class VKDestinationAdapter(DestinationAdapter):
++    """╨Я╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╤П ╨▓ VK Video ╤З╨╡╤А╨╡╨╖ ╤Б╤Г╤Й╨╡╤Б╤В╨▓╤Г╤О╤Й╨╕╨╣ VKPublisher."""
++
++    def __init__(self, publisher: "VKPublisher"):
++        self._publisher = publisher
++
++    @property
++    def destination_id(self) -> str:
++        return "vk"
++
++    def publish(self, item: ContentItem, **options: object) -> PublicationResult:
++        video_data = item.to_video_data()
++        if video_data is None:
++            return PublicationResult(
++                destination=self.destination_id,
++                ok=False,
++                error_code="NO_VIDEO",
++            )
++        url = self._publisher.publish(video_data)
++        if url:
++            return PublicationResult(destination=self.destination_id, ok=True, remote_url=url)
++        return PublicationResult(
++            destination=self.destination_id,
++            ok=False,
++            error_code="PUBLISH_FAILED",
++        )
+diff --git a/src/adapters/destinations/youtube_stub.py b/src/adapters/destinations/youtube_stub.py
+new file mode 100644
+index 0000000..7f3beee
+--- /dev/null
++++ b/src/adapters/destinations/youtube_stub.py
+@@ -0,0 +1,24 @@
++"""╨Ч╨░╨│╨╗╤Г╤И╨║╨░ ╨░╨┤╨░╨┐╤В╨╡╤А╨░ ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕ ╨▓ YouTube (Phase 3 skeleton)."""
++
++import logging
++
++from ..base import DestinationAdapter
++from ...models.content import ContentItem, PublicationResult
++
++logger = logging.getLogger(__name__)
++
++
++class YouTubeDestinationAdapter(DestinationAdapter):
++    """╨Ч╨░╨│╨╗╤Г╤И╨║╨░: ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╤П ╨▓ YouTube ╨╜╨╡ ╤А╨╡╨░╨╗╨╕╨╖╨╛╨▓╨░╨╜╨░."""
++
++    @property
++    def destination_id(self) -> str:
++        return "youtube"
++
++    def publish(self, item: ContentItem, **options: object) -> PublicationResult:
++        logger.info("YouTube adapter (stub): ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╤П ╨╜╨╡ ╤А╨╡╨░╨╗╨╕╨╖╨╛╨▓╨░╨╜╨░, item=%s", item.external_id)
++        return PublicationResult(
++            destination=self.destination_id,
++            ok=False,
++            error_code="NOT_IMPLEMENTED",
++        )
+diff --git a/src/adapters/sources/__init__.py b/src/adapters/sources/__init__.py
+new file mode 100644
+index 0000000..a885bdb
+--- /dev/null
++++ b/src/adapters/sources/__init__.py
+@@ -0,0 +1,5 @@
++"""╨Р╨┤╨░╨┐╤В╨╡╤А╤Л ╨╕╤Б╤В╨╛╤З╨╜╨╕╨║╨╛╨▓ ╨║╨╛╨╜╤В╨╡╨╜╤В╨░."""
++
++from .export_fs import ExportFilesystemSourceAdapter
++
++__all__ = ["ExportFilesystemSourceAdapter"]
+diff --git a/src/adapters/sources/export_fs.py b/src/adapters/sources/export_fs.py
+new file mode 100644
+index 0000000..b32ebaa
+--- /dev/null
++++ b/src/adapters/sources/export_fs.py
+@@ -0,0 +1,85 @@
++"""Source-╨░╨┤╨░╨┐╤В╨╡╤А: ╨║╨╛╨╜╤В╨╡╨╜╤В ╨╕╨╖ ╤Н╨║╤Б╨┐╨╛╤А╤В╨╛╨▓ ╨╜╨░ ╨┤╨╕╤Б╨║╨╡ (TG export, tg_parser ╨╕ ╤В.╨┤.)."""
++
++import logging
++from pathlib import Path
++from typing import List, Optional, TYPE_CHECKING
++
++from ..base import SourceAdapter
++
++if TYPE_CHECKING:
++    from ...storage.database import VideoStorage
++from ...models.content import ContentItem
++from ...config.source_registry import get_export_paths
++from ...parsers.html_parser import HTMLParser
++from ...parsers.json_parser import JSONParser
++from ...parsers.custom_export_parser import CustomExportParser
++from ...title_generators.factory import TitleGeneratorFactory
++from ...config.registry import CHANNEL_TO_TITLE_GENERATOR
++
++logger = logging.getLogger(__name__)
++
++
++class ExportFilesystemSourceAdapter(SourceAdapter):
++    """╨з╨╕╤В╨░╨╡╤В ╤Н╨║╤Б╨┐╨╛╤А╤В╤Л ╤Б ╨┤╨╕╤Б╨║╨░ (╤В╨╡ ╨╢╨╡ ╨┐╤Г╤В╨╕, ╤З╤В╨╛ scan) ╨╕ ╨▓╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╤В ContentItem."""
++
++    def __init__(self, storage: Optional["VideoStorage"] = None):
++        """storage ╨╛╨┐╤Ж╨╕╨╛╨╜╨░╨╗╨╡╨╜: ╨╡╤Б╨╗╨╕ ╨┐╨╡╤А╨╡╨┤╨░╨╜, ╨╕╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╤В╤Б╤П get_course_for_folder ╨┤╨╗╤П channel."""
++        self._storage = storage
++
++    @property
++    def source_id(self) -> str:
++        return "export_fs"
++
++    def fetch(
++        self,
++        source_filter: Optional[str] = None,
++        input_dir: Optional[Path] = None,
++        **options: object,
++    ) -> List[ContentItem]:
++        paths = get_export_paths(source_filter=source_filter, input_dir=input_dir)
++        channel_generators = {
++            ch: TitleGeneratorFactory.create(gen_name)
++            for ch, gen_name in CHANNEL_TO_TITLE_GENERATOR.items()
++        }
++        items: List[ContentItem] = []
++
++        for export_path in paths:
++            export_path = Path(export_path)
++            if not export_path.exists():
++                logger.warning("╨Я╤Г╤В╤М ╨╜╨╡ ╤Б╤Г╤Й╨╡╤Б╤В╨▓╤Г╨╡╤В: %s", export_path)
++                continue
++
++            parser = None
++            if HTMLParser(export_path).detect_format():
++                parser = HTMLParser(export_path)
++            elif CustomExportParser(export_path).detect_format():
++                parser = CustomExportParser(export_path)
++            elif JSONParser(export_path).detect_format():
++                parser = JSONParser(export_path)
++            else:
++                logger.debug("╨д╨╛╤А╨╝╨░╤В ╨╜╨╡ ╨╛╨┐╤А╨╡╨┤╨╡╨╗╤С╨╜: %s", export_path)
++                continue
++
++            try:
++                videos = parser.parse()
++            except Exception as e:
++                logger.error("╨Ю╤И╨╕╨▒╨║╨░ ╨┐╨░╤А╤Б╨╕╨╜╨│╨░ %s: %s", export_path, e)
++                continue
++
++            channel = None
++            if self._storage:
++                channel = self._storage.get_course_for_folder(str(export_path))
++
++            for video in videos:
++                video.channel = channel or video.channel
++                gen = channel_generators.get(video.channel) or TitleGeneratorFactory.create("simple")
++                if gen:
++                    video.title = gen.generate(video)
++                else:
++                    video.title = video.file_path.stem
++                item = ContentItem.from_video_data(video, source_folder=str(export_path))
++                items.append(item)
++
++            logger.debug("╨Ю╨▒╤А╨░╨▒╨╛╤В╨░╨╜╨╛ %s ╨▓╨╕╨┤╨╡╨╛ ╨╕╨╖ %s", len(videos), export_path)
++
++        return items
+diff --git a/src/models/__init__.py b/src/models/__init__.py
+index 7ebbde6..da8b1bc 100644
+--- a/src/models/__init__.py
++++ b/src/models/__init__.py
+@@ -1,5 +1,6 @@
+ """╨Ь╨╛╨┤╨╡╨╗╨╕ ╨┤╨░╨╜╨╜╤Л╤Е ╨┐╤А╨╛╨╡╨║╤В╨░."""
+ 
+ from .video import VideoData
++from .content import ContentItem, PublicationResult, MediaRef
+ 
+-__all__ = ["VideoData"]
++__all__ = ["VideoData", "ContentItem", "PublicationResult", "MediaRef"]
+diff --git a/src/models/content.py b/src/models/content.py
+new file mode 100644
+index 0000000..09499eb
+--- /dev/null
++++ b/src/models/content.py
+@@ -0,0 +1,102 @@
++"""╨г╨╜╨╕╤Д╨╕╤Ж╨╕╤А╨╛╨▓╨░╨╜╨╜╨░╤П ╨┤╨╛╨╝╨╡╨╜╨╜╨░╤П ╨╝╨╛╨┤╨╡╨╗╤М ╨║╨╛╨╜╤В╨╡╨╜╤В╨░ (Phase 3)."""
++
++from dataclasses import dataclass, field
++from datetime import datetime
++from pathlib import Path
++from typing import Any, Optional
++
++from .video import VideoData
++
++
++@dataclass
++class MediaRef:
++    """╨б╤Б╤Л╨╗╨║╨░ ╨╜╨░ ╨╝╨╡╨┤╨╕╨░-╤Д╨░╨╣╨╗ (╨▓╨╕╨┤╨╡╨╛, ╨╕╨╖╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╨╡ ╨╕ ╤В.╨┤.)."""
++    type: str  # "video", "image", "audio"
++    path: Optional[Path] = None
++    url: Optional[str] = None
++    metadata: dict = field(default_factory=dict)
++
++    def __post_init__(self):
++        if self.path is not None and not isinstance(self.path, Path):
++            self.path = Path(self.path)
++
++
++@dataclass
++class ContentItem:
++    """╨Х╨┤╨╕╨╜╨░╤П ╤Б╤Г╤Й╨╜╨╛╤Б╤В╤М ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕ ╨┤╨╗╤П ╨╗╤О╨▒╤Л╤Е ╨╕╤Б╤В╨╛╤З╨╜╨╕╨║╨╛╨▓ ╨╕ ╨╜╨░╨┐╤А╨░╨▓╨╗╨╡╨╜╨╕╨╣.
++
++    ╨Я╨╛╨╖╨▓╨╛╨╗╤П╨╡╤В ╨╛╨┐╨╕╤Б╤Л╨▓╨░╤В╤М ╨║╨╛╨╜╤В╨╡╨╜╤В ╨╕╨╖ TG, RSS, VK ╨╕ ╨┐╤Г╨▒╨╗╨╕╨║╨╛╨▓╨░╤В╤М ╨▓ VK, YouTube, ╨Ф╨╖╨╡╨╜ ╨╕ ╤В.╨┤.
++    """
++    source: str  # ╨Ш╨┤╨╡╨╜╤В╨╕╤Д╨╕╨║╨░╤В╨╛╤А ╨╕╤Б╤В╨╛╤З╨╜╨╕╨║╨░ (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А "tg_export", "ege", "tg_parser")
++    external_id: str  # ╨г╨╜╨╕╨║╨░╨╗╤М╨╜╤Л╨╣ ╨▓ ╤А╨░╨╝╨║╨░╤Е ╨╕╤Б╤В╨╛╤З╨╜╨╕╨║╨░ ID (╨┐╤Г╤В╤М ╨║ ╤Д╨░╨╣╨╗╤Г, message_id ╨╕ ╤В.╨┤.)
++    text: str = ""  # ╨в╨╡╨║╤Б╤В/╨╛╨┐╨╕╤Б╨░╨╜╨╕╨╡
++    title: str = ""
++    published_at: Optional[datetime] = None
++    media: list[MediaRef] = field(default_factory=list)
++    metadata: dict = field(default_factory=dict)
++
++    def primary_media_path(self) -> Optional[Path]:
++        """╨Я╤Г╤В╤М ╨║ ╨┐╨╡╤А╨▓╨╛╨╝╤Г ╨▓╨╕╨┤╨╡╨╛ (╨┤╨╗╤П ╤Б╨╛╨▓╨╝╨╡╤Б╤В╨╕╨╝╨╛╤Б╤В╨╕ ╤Б ╤В╨╡╨║╤Г╤Й╨╕╨╝ pipeline)."""
++        for m in self.media:
++            if m.type == "video" and m.path and m.path.exists():
++                return m.path
++        return None
++
++    @classmethod
++    def from_video_record(
++        cls,
++        file_path: str,
++        title: str,
++        description: str,
++        channel: Optional[str] = None,
++        source_folder: str = "",
++        date: Optional[datetime] = None,
++        record_id: Optional[int] = None,
++    ) -> "ContentItem":
++        """╨б╨╛╨▒╤А╨░╤В╤М ContentItem ╨╕╨╖ ╨┐╨╛╨╗╨╡╨╣ VideoRecord (╨┤╨╗╤П ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕ ╨╕╨╖ ╨С╨Ф)."""
++        path = Path(file_path)
++        return cls(
++            source=source_folder or "unknown",
++            external_id=str(record_id) if record_id is not None else path.name,
++            title=title,
++            text=description or "",
++            published_at=date,
++            media=[MediaRef(type="video", path=path)] if path.exists() else [],
++            metadata={"channel": channel, "source_folder": source_folder},
++        )
++
++    @classmethod
++    def from_video_data(cls, video: VideoData, source_folder: str = "", external_id: str = "") -> "ContentItem":
++        """╨б╨╛╨▒╤А╨░╤В╤М ContentItem ╨╕╨╖ VideoData (╤А╨╡╨╖╤Г╨╗╤М╤В╨░╤В ╨┐╨░╤А╤Б╨╡╤А╨╛╨▓)."""
++        return cls(
++            source=source_folder or "export",
++            external_id=external_id or video.file_path.name,
++            title=video.title,
++            text=video.description or "",
++            published_at=video.date,
++            media=[MediaRef(type="video", path=video.file_path)],
++            metadata={"channel": video.channel},
++        )
++
++    def to_video_data(self) -> Optional[VideoData]:
++        """╨Я╤А╨╡╨╛╨▒╤А╨░╨╖╨╛╨▓╨░╤В╤М ╨▓ VideoData ╨┤╨╗╤П VKPublisher (╨╡╤Б╨╗╨╕ ╨╡╤Б╤В╤М ╨▓╨╕╨┤╨╡╨╛╤Д╨░╨╣╨╗)."""
++        path = self.primary_media_path()
++        if path is None:
++            return None
++        return VideoData(
++            file_path=path,
++            title=self.title,
++            description=self.text,
++            date=self.published_at,
++            channel=self.metadata.get("channel"),
++        )
++
++
++@dataclass
++class PublicationResult:
++    """╨а╨╡╨╖╤Г╨╗╤М╤В╨░╤В ╨┐╨╛╨┐╤Л╤В╨║╨╕ ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕ ╨▓ destination (╨░╤Г╨┤╨╕╤В 5.1)."""
++    destination: str  # "vk", "youtube", "rutube", ...
++    ok: bool
++    remote_url: Optional[str] = None
++    error_code: Optional[str] = None
++    retry_count: int = 0

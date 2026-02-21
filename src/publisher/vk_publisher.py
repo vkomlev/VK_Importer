@@ -244,6 +244,16 @@ class VKPublisher:
                 return False
         return False
 
+    def delete_video(self, owner_id: int, video_id: int) -> bool:
+        """Удалить видео в VK (video.delete). owner_id — отрицательный для группы."""
+        try:
+            self.vk.video.delete(owner_id=owner_id, video_id=video_id)
+            logger.info(f"Видео удалено в VK: {owner_id}_{video_id}")
+            return True
+        except (VkApiError, ApiError) as e:
+            logger.error(f"Ошибка video.delete {owner_id}_{video_id}: {e}")
+            return False
+
     @staticmethod
     def parse_video_url(video_url: str) -> Optional[Tuple[int, int]]:
         """Извлечь owner_id и video_id из URL вида https://vk.com/video-12345_67890."""

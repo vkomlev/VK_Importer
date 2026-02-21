@@ -28,6 +28,7 @@ class VideoRecord:
     video_url: Optional[str] = None  # URL загруженного видео в VK
     post_url: Optional[str] = None  # URL поста на стене
     error_message: Optional[str] = None  # Сообщение об ошибке при загрузке
+    skip_upload: bool = False  # Пропускать при загрузке (не загружать)
     
     def to_dict(self) -> dict:
         """Преобразовать в словарь."""
@@ -71,16 +72,23 @@ class VideoStorage:
                 video_url TEXT,
                 post_url TEXT,
                 error_message TEXT,
+                skip_upload INTEGER DEFAULT 0,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
+        # Миграция: добавить skip_upload, если таблица уже существовала
+        try:
+            cursor.execute("ALTER TABLE videos ADD COLUMN skip_upload INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass  # колонка уже есть
+
         # Индексы для быстрого поиска
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_file_path ON videos(file_path)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_file_hash ON videos(file_hash)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_uploaded ON videos(uploaded)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_channel ON videos(channel)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_source_folder ON videos(source_folder)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_skip_upload ON videos(skip_upload)")
         
         # Таблица маппинга: папка -> тип курса (Python, ЕГЭ, ОГЭ)
         cursor.execute("""
@@ -138,8 +146,8 @@ class VideoStorage:
                 INSERT INTO videos (
                     file_path, file_hash, title, description, channel,
                     source_folder, date, uploaded, upload_date,
-                    video_url, post_url, error_message
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    video_url, post_url, error_message, skip_upload
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 record.file_path,
                 record.file_hash,
@@ -153,6 +161,7 @@ class VideoStorage:
                 record.video_url,
                 record.post_url,
                 record.error_message,
+                1 if record.skip_upload else 0,
             ))
             
             record_id = cursor.lastrowid
@@ -251,7 +260,7 @@ class VideoStorage:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        query = "SELECT * FROM videos WHERE uploaded = 0"
+        query = "SELECT * FROM videos WHERE uploaded = 0 AND (skip_upload IS NULL OR skip_upload = 0)"
         params = []
         
         if channel:
@@ -306,7 +315,69 @@ class VideoStorage:
         conn.commit()
         conn.close()
         logger.debug(f"Видео {video_id} отмечено как загруженное")
-    
+
+    def clear_upload_state(self, video_id: int) -> bool:
+        """Сбросить данные загрузки у записи (uploaded=0, video_url/post_url/error_message=NULL)."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE videos SET
+                uploaded = 0,
+                upload_date = NULL,
+                video_url = NULL,
+                post_url = NULL,
+                error_message = NULL
+            WHERE id = ?
+        """, (video_id,))
+        n = cursor.rowcount
+        conn.commit()
+        conn.close()
+        return n > 0
+
+    def get_skipped_with_video_url(self) -> List[VideoRecord]:
+        """Записи с skip_upload=1 и заполненным video_url (для удаления этих роликов из VK)."""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM videos WHERE skip_upload = 1 AND video_url IS NOT NULL AND video_url != ''"
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return [self._row_to_record(row) for row in rows]
+
+    def get_record_by_video_url(self, video_url: str) -> Optional[VideoRecord]:
+        """Найти запись по video_url (для сброса данных после удаления в VK)."""
+        if not video_url or not video_url.strip():
+            return None
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM videos WHERE video_url = ? LIMIT 1", (video_url.strip(),))
+        row = cursor.fetchone()
+        conn.close()
+        return self._row_to_record(row) if row else None
+
+    def clear_upload_state_for_skipped(self) -> int:
+        """Сбросить данные загрузки у всех записей с skip_upload=1. Возвращает количество обновлённых.
+        Внимание: используйте только если ролики с skip не загружались в VK или уже удалены (delete-skipped-from-vk)."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE videos SET
+                uploaded = 0,
+                upload_date = NULL,
+                video_url = NULL,
+                post_url = NULL,
+                error_message = NULL
+            WHERE skip_upload = 1
+        """)
+        n = cursor.rowcount
+        conn.commit()
+        conn.close()
+        logger.info(f"Сброшены данные загрузки у {n} записей с skip_upload=1")
+        return n
+
     def get_videos_range(self, start_id: int, count: Optional[int] = None, 
                          channel: Optional[str] = None, source_folder: Optional[str] = None) -> List[VideoRecord]:
         """Получить диапазон видео.
@@ -324,7 +395,7 @@ class VideoStorage:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        query = "SELECT * FROM videos WHERE id >= ?"
+        query = "SELECT * FROM videos WHERE id >= ? AND (skip_upload IS NULL OR skip_upload = 0)"
         params = [start_id]
         
         if channel:
@@ -381,7 +452,7 @@ class VideoStorage:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        query = "SELECT * FROM videos WHERE uploaded = 0"
+        query = "SELECT * FROM videos WHERE uploaded = 0 AND (skip_upload IS NULL OR skip_upload = 0)"
         params = []
         
         if channel:
@@ -399,6 +470,46 @@ class VideoStorage:
         conn.close()
         
         return [self._row_to_record(row) for row in rows]
+    
+    def set_skip_upload(self, ids: Optional[List[int]] = None, filenames: Optional[List[str]] = None, skip: bool = True) -> int:
+        """Пометить видео для пропуска загрузки (или снять пометку).
+        
+        Args:
+            ids: Список ID записей.
+            filenames: Список имён файлов или путей; совпадение по окончанию file_path.
+            skip: True — пометить пропуск, False — снять пометку.
+            
+        Returns:
+            Количество обновлённых записей.
+        """
+        if not ids and not filenames:
+            return 0
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        updated = 0
+        val = 1 if skip else 0
+        if ids:
+            placeholders = ",".join("?" * len(ids))
+            cursor.execute(
+                f"UPDATE videos SET skip_upload = ? WHERE id IN ({placeholders})",
+                [val] + list(ids),
+            )
+            updated += cursor.rowcount
+        if filenames:
+            for name in filenames:
+                name_esc = name.replace("\\", "/").strip()
+                if not name_esc:
+                    continue
+                # Совпадение: file_path заканчивается на /name или \name или равен name
+                cursor.execute(
+                    "UPDATE videos SET skip_upload = ? WHERE file_path = ? OR file_path LIKE ? OR file_path LIKE ?",
+                    (val, name_esc, f"%/{name_esc}", f"%\\{name_esc}"),
+                )
+                updated += cursor.rowcount
+        conn.commit()
+        conn.close()
+        logger.debug(f"Пометка skip_upload={skip}: обновлено записей {updated}")
+        return updated
     
     def find_by_hash(self, file_hash: str) -> Optional[VideoRecord]:
         """Найти видео по хешу файла (для определения дубликатов).
@@ -440,6 +551,12 @@ class VideoStorage:
         cursor.execute("SELECT COUNT(*) FROM videos WHERE uploaded = 0")
         not_uploaded = cursor.fetchone()[0]
         
+        cursor.execute("SELECT COUNT(*) FROM videos WHERE (skip_upload IS NULL OR skip_upload = 0) AND uploaded = 0")
+        not_uploaded_candidates = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM videos WHERE skip_upload = 1")
+        skipped = cursor.fetchone()[0]
+        
         cursor.execute("SELECT COUNT(DISTINCT channel) FROM videos WHERE channel IS NOT NULL")
         channels = cursor.fetchone()[0]
         
@@ -452,6 +569,8 @@ class VideoStorage:
             "total": total,
             "uploaded": uploaded,
             "not_uploaded": not_uploaded,
+            "not_uploaded_candidates": not_uploaded_candidates,
+            "skipped": skipped,
             "channels": channels,
             "source_folders": folders,
         }
@@ -562,4 +681,5 @@ class VideoStorage:
             video_url=row["video_url"],
             post_url=row["post_url"],
             error_message=row["error_message"],
+            skip_upload=bool(row["skip_upload"]) if "skip_upload" in row.keys() else False,
         )

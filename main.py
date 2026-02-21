@@ -46,6 +46,9 @@ logger = logging.getLogger(__name__)
 # Корень проекта (для вызова scripts/refresh_vk_token.py)
 _PROJECT_ROOT = Path(__file__).resolve().parent
 
+# Рекомендуемая задержка между загрузками (VK API: лимит частоты, антибот). См. docs/USAGE.md
+DEFAULT_UPLOAD_DELAY = 15.0
+
 
 def _refresh_vk_token_callback() -> Optional[str]:
     """Запуск обновления VK токена по refresh_token и возврат нового access_token из .env."""
@@ -300,13 +303,159 @@ def stats():
     click.echo(f"Всего видео: {stats['total']}")
     click.echo(f"Загружено: {stats['uploaded']}")
     click.echo(f"Не загружено: {stats['not_uploaded']}")
+    if stats.get("skipped", 0):
+        click.echo(f"Помечено для пропуска: {stats['skipped']}")
     click.echo(f"Каналов: {stats['channels']}")
     click.echo(f"Папок источников: {stats['source_folders']}")
 
 
+def _read_filenames_from_file(path: Path) -> list[str]:
+    """Прочитать имена файлов из UTF-8 файла (по одному на строку)."""
+    with open(path, "r", encoding="utf-8") as f:
+        return [line.strip() for line in f if line.strip()]
+
+
+@cli.command()
+@click.option("--id", "ids", type=int, multiple=True, help="ID записей для пометки")
+@click.option("--file", "files", type=str, multiple=True, help="Имя файла или путь (совпадение по окончанию file_path)")
+@click.option("--file-from", "file_from", type=click.Path(path_type=Path, exists=True), help="Файл UTF-8 со списком имён (по одному на строку) — обход проблем кодировки в терминале")
+def skip(ids: tuple, files: tuple, file_from: Optional[Path]):
+    """Пометить видео для пропуска загрузки (не загружать)."""
+    file_list = list(files) if files else []
+    if file_from:
+        file_list.extend(_read_filenames_from_file(file_from))
+    if not ids and not file_list:
+        click.echo("Укажите хотя бы один --id, --file или --file-from.", err=True)
+        return
+    storage = get_storage()
+    n = storage.set_skip_upload(ids=list(ids) if ids else None, filenames=file_list or None, skip=True)
+    click.echo(f"Помечено для пропуска: {n} записей.")
+
+
+@cli.command()
+@click.option("--id", "ids", type=int, multiple=True, help="ID записей для снятия пометки")
+@click.option("--file", "files", type=str, multiple=True, help="Имя файла или путь")
+@click.option("--file-from", "file_from", type=click.Path(path_type=Path, exists=True), help="Файл UTF-8 со списком имён (по одному на строку)")
+def unskip(ids: tuple, files: tuple, file_from: Optional[Path]):
+    """Снять пометку «пропускать загрузку» с видео."""
+    file_list = list(files) if files else []
+    if file_from:
+        file_list.extend(_read_filenames_from_file(file_from))
+    if not ids and not file_list:
+        click.echo("Укажите хотя бы один --id, --file или --file-from.", err=True)
+        return
+    storage = get_storage()
+    n = storage.set_skip_upload(ids=list(ids) if ids else None, filenames=file_list or None, skip=False)
+    click.echo(f"Снята пометка пропуска: {n} записей.")
+
+
+@cli.command("delete-skipped-from-vk")
+@click.option("--delay", "-d", type=float, default=DEFAULT_UPLOAD_DELAY, help="Пауза между запросами к VK (сек)")
+@click.option("--dry-run", is_flag=True, help="Только показать, что будет удалено, не вызывать API")
+def delete_skipped_from_vk(delay: float, dry_run: bool):
+    """Удалить из VK ролики по URL записей с skip=1 (удобный отбор по пометке; удаление всё равно по URL)."""
+    storage = get_storage()
+    records = storage.get_skipped_with_video_url()
+    if not records:
+        click.echo("Нет записей с пометкой skip и заполненным video_url.")
+        return
+    url_list = [r.video_url for r in records if r.video_url]
+    click.echo(f"Найдено записей с skip=1 и URL: {len(url_list)}. Удаление по URL.")
+    access_token = get_env_var("VK_ACCESS_TOKEN")
+    if not access_token:
+        click.echo("ОШИБКА: VK_ACCESS_TOKEN не найден в .env", err=True)
+        return
+    try:
+        publisher = VKPublisher(access_token=access_token, group_id=None, on_token_expired=_refresh_vk_token_callback)
+    except VKPublisherError as e:
+        click.echo(f"ОШИБКА инициализации VK API: {e}", err=True)
+        return
+    _delete_from_vk_by_urls(url_list, storage, publisher, delay, dry_run)
+
+
+@cli.command("clear-skip-upload-state")
+def clear_skip_upload_state():
+    """Сбросить данные загрузки у всех записей с пометкой skip (только локально). Используйте после delete-skipped-from-vk или если ролики с skip в VK не загружались."""
+    storage = get_storage()
+    n = storage.clear_upload_state_for_skipped()
+    click.echo(f"Сброшены данные загрузки у {n} записей с пометкой skip.")
+
+
+def _delete_from_vk_by_urls(
+    urls: list[str],
+    storage: VideoStorage,
+    publisher: VKPublisher,
+    delay: float,
+    dry_run: bool,
+) -> None:
+    """Удалить в VK видео по списку URL; при наличии записи в БД с таким video_url — сбросить данные загрузки."""
+    parsed = []
+    for url in urls:
+        url = url.strip()
+        if not url or url.startswith("#"):
+            continue
+        pair = VKPublisher.parse_video_url(url)
+        if pair:
+            parsed.append((pair[0], pair[1], url))
+        else:
+            click.echo(f"  Не удалось разобрать URL: {url!r}", err=True)
+    if not parsed:
+        return
+    if dry_run:
+        for oid, vid, url in parsed:
+            click.echo(f"  {url} -> video.delete(owner_id={oid}, video_id={vid})")
+        click.echo(f"Всего к удалению в VK: {len(parsed)}. Запустите без --dry-run.")
+        return
+    ok = 0
+    for idx, (owner_id, video_id, url) in enumerate(parsed):
+        if publisher.delete_video(owner_id, video_id):
+            rec = storage.get_record_by_video_url(url)
+            if rec:
+                storage.clear_upload_state(rec.id)
+                click.echo(f"  {url} — удалено в VK, данные в БД (ID {rec.id}) сброшены")
+            else:
+                click.echo(f"  {url} — удалено в VK")
+            ok += 1
+        else:
+            click.echo(f"  {url} — ошибка удаления в VK")
+        if idx < len(parsed) - 1 and delay > 0:
+            time.sleep(delay)
+    click.echo(f"Готово: удалено в VK — {ok} из {len(parsed)}.")
+
+
+@cli.command("delete-from-vk")
+@click.option("--url", "urls", type=str, multiple=True, help="URL видео в VK (например https://vk.com/video-123_456)")
+@click.option("--urls-file", type=click.Path(path_type=Path, exists=True), help="Файл со списком URL (по одному на строку)")
+@click.option("--delay", "-d", type=float, default=DEFAULT_UPLOAD_DELAY, help="Пауза между запросами к VK (сек)")
+@click.option("--dry-run", is_flag=True, help="Только показать, что будет удалено, не вызывать API")
+def delete_from_vk(urls: tuple, urls_file: Optional[Path], delay: float, dry_run: bool):
+    """Удалить видео в VK по URL (video.delete). Можно удалить любое видео. Если в БД есть запись с этим video_url — сбросить данные загрузки."""
+    url_list = list(urls) if urls else []
+    if urls_file:
+        with open(urls_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    url_list.append(line)
+    if not url_list:
+        click.echo("Укажите --url или --urls-file.", err=True)
+        return
+    storage = get_storage()
+    access_token = get_env_var("VK_ACCESS_TOKEN")
+    if not access_token:
+        click.echo("ОШИБКА: VK_ACCESS_TOKEN не найден в .env", err=True)
+        return
+    try:
+        publisher = VKPublisher(access_token=access_token, group_id=None, on_token_expired=_refresh_vk_token_callback)
+    except VKPublisherError as e:
+        click.echo(f"ОШИБКА инициализации VK API: {e}", err=True)
+        return
+    _delete_from_vk_by_urls(url_list, storage, publisher, delay, dry_run)
+
+
 @cli.command()
 @click.argument("video_id", type=int)
-@click.option("--delay", "-d", type=float, default=5.0, help="Задержка между загрузками")
+@click.option("--delay", "-d", type=float, default=DEFAULT_UPLOAD_DELAY, help="Задержка между загрузками (сек); по умолчанию с учётом лимитов VK API")
 @click.option("--max-retries", "-r", type=int, default=3, help="Максимальное количество повторных попыток")
 def upload_one(video_id: int, delay: float, max_retries: int):
     """Загрузить конкретное видео по ID."""
@@ -320,14 +469,18 @@ def upload_one(video_id: int, delay: float, max_retries: int):
     if record.uploaded:
         click.echo(f"Видео {video_id} уже загружено: {record.video_url}")
         return
-    
+
+    if getattr(record, "skip_upload", False):
+        click.echo("Видео помечено для пропуска загрузки. Снимите пометку: python main.py unskip --id " + str(video_id))
+        return
+
     _upload_video(record, storage, delay, max_retries)
 
 
 @cli.command()
 @click.option("--channel", "-c", help="Фильтр по каналу (ЕГЭ, Python)")
 @click.option("--source", "-s", help="Фильтр по папке источника")
-@click.option("--delay", "-d", type=float, default=5.0, help="Задержка между загрузками")
+@click.option("--delay", "-d", type=float, default=DEFAULT_UPLOAD_DELAY, help="Задержка между загрузками (сек); по умолчанию с учётом лимитов VK API")
 @click.option("--max-retries", "-r", type=int, default=3, help="Максимальное количество повторных попыток")
 def upload_next(channel: Optional[str], source: Optional[str], delay: float, max_retries: int):
     """Загрузить следующее не загруженное видео."""
@@ -347,7 +500,7 @@ def upload_next(channel: Optional[str], source: Optional[str], delay: float, max
 @click.option("--count", "-n", type=int, default=None, help="Количество видео (по умолчанию все до конца)")
 @click.option("--channel", "-c", help="Фильтр по каналу")
 @click.option("--source", "-s", help="Фильтр по папке источника")
-@click.option("--delay", "-d", type=float, default=5.0, help="Задержка между загрузками")
+@click.option("--delay", "-d", type=float, default=DEFAULT_UPLOAD_DELAY, help="Задержка между загрузками (сек); по умолчанию с учётом лимитов VK API")
 @click.option("--max-retries", "-r", type=int, default=3, help="Максимальное количество повторных попыток")
 def upload_range(start_id: int, count: Optional[int], channel: Optional[str], source: Optional[str], 
                  delay: float, max_retries: int):
@@ -367,7 +520,7 @@ def upload_range(start_id: int, count: Optional[int], channel: Optional[str], so
 @click.option("--count", "-n", type=int, default=None, help="Количество видео")
 @click.option("--channel", "-c", help="Фильтр по каналу")
 @click.option("--source", "-s", help="Фильтр по папке источника")
-@click.option("--delay", "-d", type=float, default=5.0, help="Задержка между загрузками")
+@click.option("--delay", "-d", type=float, default=DEFAULT_UPLOAD_DELAY, help="Задержка между загрузками (сек); по умолчанию с учётом лимитов VK API")
 @click.option("--max-retries", "-r", type=int, default=3, help="Максимальное количество повторных попыток")
 def upload_many(count: Optional[int], channel: Optional[str], source: Optional[str], 
                 delay: float, max_retries: int):
@@ -388,7 +541,7 @@ def upload_many(count: Optional[int], channel: Optional[str], source: Optional[s
 @cli.command()
 @click.option("--channel", "-c", help="Фильтр по каналу")
 @click.option("--source", "-s", help="Фильтр по папке источника")
-@click.option("--delay", "-d", type=float, default=5.0, help="Задержка между загрузками")
+@click.option("--delay", "-d", type=float, default=DEFAULT_UPLOAD_DELAY, help="Задержка между загрузками (сек); по умолчанию с учётом лимитов VK API")
 @click.option("--max-retries", "-r", type=int, default=3, help="Максимальное количество повторных попыток")
 def upload_all(channel: Optional[str], source: Optional[str], delay: float, max_retries: int):
     """Загрузить все не загруженные видео с самого начала."""
@@ -511,7 +664,10 @@ def update_vk_titles(ids_file: str, delay: float):
 
 
 def _upload_video(record: VideoRecord, storage: VideoStorage, delay: float, max_retries: int):
-    """Загрузить одно видео."""
+    """Загрузить одно видео. При skip_upload загрузка не выполняется."""
+    if getattr(record, "skip_upload", False):
+        click.echo("Пропуск: запись помечена для пропуска загрузки (skip).")
+        return
     # Загружаем переменные окружения
     access_token = get_env_var("VK_ACCESS_TOKEN")
     group_id_str = get_env_var("VK_GROUP_ID")
@@ -601,8 +757,13 @@ def _upload_batch(records: list[VideoRecord], storage: VideoStorage, delay: floa
     
     successful = 0
     failed = 0
-    
+    skipped = 0
+
     for idx, record in enumerate(records, 1):
+        if getattr(record, "skip_upload", False):
+            click.echo(f"\n[{idx}/{len(records)}] Пропуск ID {record.id} (помечено для пропуска загрузки)")
+            skipped += 1
+            continue
         click.echo(f"\n[{idx}/{len(records)}] Загрузка видео ID {record.id}: {Path(record.file_path).name}")
         
         video_data = VideoData(
@@ -637,6 +798,8 @@ def _upload_batch(records: list[VideoRecord], storage: VideoStorage, delay: floa
     click.echo("=" * 80)
     click.echo(f"Успешно: {successful}")
     click.echo(f"Ошибок: {failed}")
+    if skipped:
+        click.echo(f"Пропущено (skip): {skipped}")
     click.echo(f"Всего: {len(records)}")
 
 

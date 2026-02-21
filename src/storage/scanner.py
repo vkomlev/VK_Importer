@@ -10,6 +10,7 @@ from ..parsers.json_parser import JSONParser
 from ..parsers.custom_export_parser import CustomExportParser
 from ..title_generators.factory import TitleGeneratorFactory
 from ..models.video import VideoData
+from ..config.registry import CHANNEL_TO_TITLE_GENERATOR
 from .database import VideoStorage, VideoRecord
 from .duplicate_detector import DuplicateDetector
 
@@ -94,15 +95,10 @@ class VideoScanner:
                 except Exception as e:
                     logger.error(f"Ошибка при парсинге {export_path}: {e}", exc_info=True)
         
-        # Генерируем заголовки: ЕГЭ/ОГЭ/Алгоритмы — тема/задание; Python/Excel/Аналитика/Комлев — префикс + описание
+        # Генерируем заголовки по маппингу из config.registry
         channel_generators = {
-            "ЕГЭ": TitleGeneratorFactory.create("ege_auto"),
-            "ОГЭ": TitleGeneratorFactory.create("oge_auto"),
-            "Алгоритмы": TitleGeneratorFactory.create("algorithms_auto"),
-            "Python": TitleGeneratorFactory.create("python_auto"),
-            "Excel": TitleGeneratorFactory.create("excel"),
-            "Аналитика данных": TitleGeneratorFactory.create("analytics"),
-            "Комлев": TitleGeneratorFactory.create("komlev"),
+            ch: TitleGeneratorFactory.create(gen_name)
+            for ch, gen_name in CHANNEL_TO_TITLE_GENERATOR.items()
         }
         for video_data, source_folder in all_videos:
             generator = channel_generators.get(video_data.channel) or TitleGeneratorFactory.create("simple")

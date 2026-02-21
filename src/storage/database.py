@@ -8,6 +8,8 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 import logging
 
+from ..config.registry import COURSE_TYPES
+
 logger = logging.getLogger(__name__)
 
 
@@ -575,10 +577,10 @@ class VideoStorage:
             "source_folders": folders,
         }
     
-    # --- Маппинг папка -> тип курса ---
+    # --- Маппинг папка -> тип курса (COURSE_TYPES из config.registry) ---
     
-    VALID_COURSE_TYPES = ("Python", "ЕГЭ", "ОГЭ", "Алгоритмы", "Excel", "Комлев", "Аналитика данных")
-    
+    VALID_COURSE_TYPES = COURSE_TYPES
+
     def set_folder_course(self, folder_path: str, course_type: str) -> None:
         """Установить тип курса для папки.
         

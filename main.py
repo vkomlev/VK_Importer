@@ -1,6 +1,7 @@
 """Точка входа CLI приложения."""
 
 import json
+import sqlite3
 import subprocess
 import sys
 import io
@@ -269,6 +270,76 @@ def stats():
         click.echo(f"Помечено для пропуска: {st['skipped']}")
     click.echo(f"Каналов: {st['channels']}")
     click.echo(f"Папок источников: {st['source_folders']}")
+
+
+@cli.command("export-excel")
+@click.option("--db", default="videos.db", type=click.Path(path_type=Path, exists=False), help="Путь к файлу БД")
+@click.option("--output", "-o", "output_path", type=click.Path(path_type=Path, exists=False), help="Путь к выходному Excel (по умолчанию: videos_export_YYYYMMDD_HHMMSS.xlsx)")
+def export_excel(db: Path, output_path: Optional[Path]):
+    """Выгрузить таблицу videos из БД в Excel (.xlsx)."""
+    try:
+        import pandas as pd
+    except ImportError:
+        click.echo("Установите зависимости: pip install pandas openpyxl", err=True)
+        write_summary("export-excel", EXIT_FATAL, {}, [], ["Нет модуля pandas"])
+        sys.exit(EXIT_FATAL)
+
+    db_path = Path(db)
+    if not db_path.exists():
+        click.echo(f"Файл БД не найден: {db_path}", err=True)
+        write_summary("export-excel", EXIT_FATAL, {}, [], [f"Файл БД не найден: {db_path}"])
+        sys.exit(EXIT_FATAL)
+
+    if output_path is None:
+        output_path = Path(f"videos_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+    output_path = Path(output_path)
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM videos ORDER BY id")
+    rows = cursor.fetchall()
+    conn.close()
+
+    if not rows:
+        click.echo("Таблица videos пуста. Файл не создан.")
+        write_summary("export-excel", EXIT_SUCCESS, {"rows": 0}, [], [])
+        return
+
+    data = []
+    for row in rows:
+        data.append({
+            "ID": row["id"],
+            "Путь к файлу": row["file_path"],
+            "Хеш файла": row["file_hash"] or "",
+            "Заголовок": row["title"],
+            "Описание": (row["description"] or "")[:500],
+            "Канал": row["channel"] or "",
+            "Папка источника": row["source_folder"],
+            "Дата видео": row["date"] or "",
+            "Загружено": "Да" if row["uploaded"] else "Нет",
+            "Пропуск загрузки": "Да" if row["skip_upload"] else "Нет",
+            "Дата загрузки": row["upload_date"] or "",
+            "URL видео": row["video_url"] or "",
+            "URL поста": row["post_url"] or "",
+            "Ошибка": row["error_message"] or "",
+            "Создано": row["created_at"] or "",
+        })
+
+    df = pd.DataFrame(data)
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name="Видео", index=False)
+        ws = writer.sheets["Видео"]
+        widths = {"A": 8, "B": 50, "C": 20, "D": 60, "E": 50, "F": 10, "G": 40, "H": 20, "I": 10, "J": 14, "K": 20, "L": 50, "M": 50, "N": 50, "O": 20}
+        for col, w in widths.items():
+            ws.column_dimensions[col].width = w
+        ws.freeze_panes = "A2"
+
+    storage = VideoStorage(db_path)
+    st = storage.get_statistics()
+    click.echo(f"Экспортировано {len(data)} записей в {output_path}")
+    click.echo(f"Всего: {st['total']}, загружено: {st['uploaded']}, не загружено: {st['not_uploaded']}, каналов: {st['channels']}")
+    write_summary("export-excel", EXIT_SUCCESS, {"rows": len(data), "path": str(output_path), **st}, [], [])
 
 
 def _read_filenames_from_file(path: Path) -> list[str]:

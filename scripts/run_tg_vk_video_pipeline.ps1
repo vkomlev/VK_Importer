@@ -37,8 +37,13 @@ function Get-ActivePipelineRuns {
     })
   if ($all.Count -eq 0) { return @() }
 
-  # Исключаем текущий powershell-процесс скрипта
-  return @($all | Where-Object { $_.ProcessId -ne $PID })
+  # Исключаем текущий powershell-процесс скрипта и его родителя-обёртку запуска
+  $self = Get-CimInstance Win32_Process -Filter "ProcessId = $PID"
+  $parentId = if ($self) { [int]$self.ParentProcessId } else { -1 }
+
+  return @($all | Where-Object {
+    $_.ProcessId -ne $PID -and $_.ProcessId -ne $parentId
+  })
 }
 
 $channels = @(

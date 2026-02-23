@@ -1,0 +1,395 @@
+﻿diff --git a/docs/EXIT-CODES-AND-SUMMARY-SPEC.md b/docs/EXIT-CODES-AND-SUMMARY-SPEC.md
+index e629654..6c12cf3 100644
+--- a/docs/EXIT-CODES-AND-SUMMARY-SPEC.md
++++ b/docs/EXIT-CODES-AND-SUMMARY-SPEC.md
+@@ -12,6 +12,7 @@
+ | **0** | Success | ╨Ъ╨╛╨╝╨░╨╜╨┤╨░ ╨▓╤Л╨┐╨╛╨╗╨╜╨╡╨╜╨░ ╤Г╤Б╨┐╨╡╤И╨╜╨╛. |
+ | **1** | Fatal error | ╨Ъ╨╛╨╜╤Д╨╕╨│/╨╛╨║╤А╤Г╨╢╨╡╨╜╨╕╨╡ (╨╜╨╡╤В .env, ╨╜╨╡╤В ╤В╨╛╨║╨╡╨╜╨░), ╨░╤А╨│╤Г╨╝╨╡╨╜╤В╤Л (╨╜╨╡╨▓╨╡╤А╨╜╤Л╨╣ ╤Д╨╛╤А╨╝╨░╤В ╨┤╨░╤В╤Л, ╨┐╤Г╤В╤М ╨╜╨╡ ╤Б╤Г╤Й╨╡╤Б╤В╨▓╤Г╨╡╤В ╨┐╤А╨╕ ╨╛╨▒╤П╨╖╨░╤В╨╡╨╗╤М╨╜╨╛╨╝ ╨┐╤Г╤В╨╕), ╨╕╨╜╨╕╤Ж╨╕╨░╨╗╨╕╨╖╨░╤Ж╨╕╤П API, ╨┐╤А╨╡╤А╤Л╨▓╨░╨╜╨╕╨╡ ╨╕╨╖-╨╖╨░ ╨╛╤В╤Б╤Г╤В╤Б╤В╨▓╨╕╤П ╨┤╨░╨╜╨╜╤Л╤Е ╨┤╨╗╤П ╤А╨░╨▒╨╛╤В╤Л (╨╜╨╡╤В ╤Н╨║╤Б╨┐╨╛╤А╤В╨╛╨▓ ╨┤╨╗╤П scan ╨┐╤А╨╕ ╨╛╨▒╤П╨╖╨░╤В╨╡╨╗╤М╨╜╨╛╨╝ ╤И╨░╨│╨╡ ╨╕ ╤В.╨┐.). |
+ | **2** | Partial failure | ╨з╨░╤Б╤В╤М ╨╛╨┐╨╡╤А╨░╤Ж╨╕╨╣ ╨▓╤Л╨┐╨╛╨╗╨╜╨╡╨╜╨░, ╤З╨░╤Б╤В╤М тАФ ╨╜╨╡╤В (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А upload-all: ╤З╨░╤Б╤В╤М ╨╖╨░╨│╤А╤Г╨╢╨╡╨╜╨░, ╤З╨░╤Б╤В╤М ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣). |
++| **3** | VK context (1051) | VK API 1051: ╨╝╨╡╤В╨╛╨┤ ╨╜╨╡╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ ╨┤╨╗╤П ╤В╨╕╨┐╨░ ╨┐╤А╨╛╤Д╨╕╨╗╤П/╤В╨╛╨║╨╡╨╜╨░. ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╤В╤Б╤П ╨▓ `upload-one` ╨┤╨╗╤П fail-fast ╨▓ ╨┐╨░╨╣╨┐╨╗╨░╨╣╨╜╨╡ (╨┐╤А╨╡╤А╨▓╨░╤В╤М batch, ╨╜╨╡ ╨╝╨╛╨╗╨╛╤В╨╕╤В╤М ╨▓╤Б╨╡ ID). |
+ | **130** | Interrupted | ╨Я╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М ╨┐╤А╨╡╤А╨▓╨░╨╗ ╨▓╤Л╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╡ (Ctrl+C). ╨Ю╨▒╤А╨░╨▒╨░╤В╤Л╨▓╨░╤В╤М ╨▓ `if __name__ == "__main__"` ╤З╨╡╤А╨╡╨╖ `sys.exit(130)` ╨┐╤А╨╕ `KeyboardInterrupt`. |
+ 
+ **╨Я╤А╨░╨▓╨╕╨╗╨╛:** ╨┐╤А╨╕ ╨╗╤О╨▒╨╛╨╝ ╤Д╨░╤В╨░╨╗╤М╨╜╨╛╨╝ ╤Б╨▒╨╛╨╡ (╨╜╨╡╨▓╨╛╨╖╨╝╨╛╨╢╨╜╨╛╤Б╤В╤М ╨▓╤Л╨┐╨╛╨╗╨╜╨╕╤В╤М ╨║╨╛╨╝╨░╨╜╨┤╤Г) тАФ `sys.exit(1)`. ╨Я╤А╨╕ ┬л╨╜╨╕╤З╨╡╨│╨╛ ╨╜╨╡ ╤Б╨┤╨╡╨╗╨░╨╜╨╛, ╨╜╨╛ ╤Н╤В╨╛ ╨╜╨╡ ╨╛╤И╨╕╨▒╨║╨░┬╗ (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А `upload-next` ╨┐╤А╨╕ ╨┐╤Г╤Б╤В╨╛╨╣ ╨╛╤З╨╡╤А╨╡╨┤╨╕) тАФ ╨┤╨╛╨┐╤Г╤Б╤В╨╕╨╝╨╛ `return` ╤Б ╨║╨╛╨┤╨╛╨╝ 0; ╨┐╤А╨╕ ┬л╤Б╨┤╨╡╨╗╨░╨╜╨╛ ╤З╨░╤Б╤В╨╕╤З╨╜╨╛┬╗ тАФ `sys.exit(2)` ╨▓ ╨║╨╛╨╜╤Ж╨╡ ╨║╨╛╨╝╨░╨╜╨┤╤Л, ╨╡╤Б╨╗╨╕ ╤Н╤В╨╛ ╨▓╨░╨╢╨╜╨╛ ╨┤╨╗╤П ╨╛╤А╨║╨╡╤Б╤В╤А╨░╤В╨╛╤А╨░.
+diff --git a/main.py b/main.py
+index 86e47c8..af6384d 100644
+--- a/main.py
++++ b/main.py
+@@ -24,7 +24,7 @@ from src.storage.database import VideoStorage, VideoRecord
+ from src.storage.job_queue import JobQueue, JobRecord
+ from src.storage.scanner import VideoScanner
+ from src.title_generators.factory import TitleGeneratorFactory
+-from src.publisher.vk_publisher import VKPublisher
++from src.publisher.vk_publisher import VKPublisher, VKApi1051Error
+ from src.utils.env_utils import get_env_var
+ from src.models.video import VideoData
+ from src.models.content import ContentItem
+@@ -58,6 +58,7 @@ DEFAULT_UPLOAD_DELAY = 15.0
+ EXIT_SUCCESS = 0
+ EXIT_FATAL = 1
+ EXIT_PARTIAL = 2
++EXIT_VK_CONTEXT = 3  # VK API 1051: ╨╝╨╡╤В╨╛╨┤ ╨╜╨╡╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ ╨┤╨╗╤П ╨┐╤А╨╛╤Д╨╕╨╗╤П/╤В╨╛╨║╨╡╨╜╨░ тАФ ╨┐╤А╨╡╤А╨▓╨░╤В╤М batch
+ EXIT_INTERRUPTED = 130
+ 
+ SUMMARY_FILE = Path("logs/last_summary.json")
+@@ -458,7 +459,9 @@ def upload_one(video_id: int, delay: float, max_retries: int):
+     uploaded = bool(record and record.video_url)
+     stats = {"uploaded": uploaded, "video_id": video_id, "video_url": (record.video_url or "") if record else ""}
+     if not ok and err:
+-        # ╨Ю╨┐╨╡╤А╨░╤Ж╨╕╨╛╨╜╨╜╨░╤П ╨╜╨╡╤Г╨┤╨░╤З╨░ ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕ (publish -> None, NO_VIDEO ╨╕ ╤В.╨┤.) = partial; ╨║╨╛╨╜╤Д╨╕╨│/╨╕╨╜╨╕╤Ж╨╕╨░╨╗╨╕╨╖╨░╤Ж╨╕╤П = fatal
++        if err == "VK_API_1051":
++            write_summary("upload-one", EXIT_VK_CONTEXT, stats, [], [err])
++            sys.exit(EXIT_VK_CONTEXT)
+         exit_code = EXIT_PARTIAL if err in PARTIAL_UPLOAD_ERROR_CODES else EXIT_FATAL
+         write_summary("upload-one", exit_code, stats, [], [err])
+         sys.exit(exit_code)
+@@ -679,6 +682,24 @@ def update_vk_titles(ids_file: str, delay: float):
+         sys.exit(EXIT_PARTIAL)
+ 
+ 
++@cli.command("vk-preflight")
++def vk_preflight():
++    """╨Я╤А╨╛╨▓╨╡╤А╨╕╤В╤М, ╤З╤В╨╛ ╤В╨╛╨║╨╡╨╜ ╨╕ ╨│╤А╤Г╨┐╨┐╨░ ╨┐╨╛╨╖╨▓╨╛╨╗╤П╤О╤В ╨▓╤Л╨╖╤Л╨▓╨░╤В╤М video API (╨┐╨╡╤А╨╡╨┤ batch upload). ╨Я╤А╨╕ 1051 тАФ ╨▓╤Л╤Е╨╛╨┤ ╤Б ╨╛╤И╨╕╨▒╨║╨╛╨╣."""
++    try:
++        publisher = get_vk_publisher(0, 1, group_id_required=True, on_token_expired=_refresh_vk_token_callback)
++        publisher.check_video_access()
++    except FatalUploadError as e:
++        click.echo(f"╨Ю╨и╨Ш╨С╨Ъ╨Р: {e.message}", err=True)
++        write_summary("vk-preflight", EXIT_FATAL, {}, [], [e.message])
++        sys.exit(EXIT_FATAL)
++    except VKApi1051Error as e:
++        click.echo(f"╨Ю╨и╨Ш╨С╨Ъ╨Р VK 1051: {e}", err=True)
++        write_summary("vk-preflight", EXIT_FATAL, {}, [], [str(e)])
++        sys.exit(EXIT_FATAL)
++    write_summary("vk-preflight", EXIT_SUCCESS, {"ok": True}, [], [])
++    click.echo("VK video preflight OK.")
++
++
+ def _upload_video(record: VideoRecord, storage: VideoStorage, delay: float, max_retries: int) -> tuple[bool, Optional[str]]:
+     """╨Ч╨░╨│╤А╤Г╨╖╨╕╤В╤М ╨╛╨┤╨╜╨╛ ╨▓╨╕╨┤╨╡╨╛ ╤З╨╡╤А╨╡╨╖ DestinationAdapter. ╨Т╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╤В (╤Г╤Б╨┐╨╡╤Е, ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╨╡_╨╛╨▒_╨╛╤И╨╕╨▒╨║╨╡ ╨╕╨╗╨╕ None). ╨Я╤А╨╕ skip_upload ╨╖╨░╨│╤А╤Г╨╖╨║╨░ ╨╜╨╡ ╨▓╤Л╨┐╨╛╨╗╨╜╤П╨╡╤В╤Б╤П тАФ (False, None)."""
+     if getattr(record, "skip_upload", False):
+diff --git a/scripts/run_tg_vk_video_pipeline.ps1 b/scripts/run_tg_vk_video_pipeline.ps1
+index 806a315..b3aa945 100644
+--- a/scripts/run_tg_vk_video_pipeline.ps1
++++ b/scripts/run_tg_vk_video_pipeline.ps1
+@@ -18,6 +18,17 @@ $tgRoot = 'D:\work\TG_Parser'
+ $vkPy = Join-Path $vkRoot 'venv\Scripts\python.exe'
+ $tgPy = Join-Path $tgRoot '.venv\Scripts\python.exe'
+ 
++$pipelineLogDir = Join-Path $vkRoot 'logs'
++New-Item -ItemType Directory -Path $pipelineLogDir -Force | Out-Null
++$pipelineLogFile = Join-Path $pipelineLogDir ("pipeline_run_" + (Get-Date -Format 'yyyy-MM-dd_HH-mm-ss') + ".log")
++
++function Write-RunLog([string]$message, [string]$level = 'INFO') {
++  $ts = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
++  $line = "[$ts] [$level] $message"
++  Add-Content -Path $pipelineLogFile -Value $line -Encoding UTF8
++  Write-Host $line
++}
++
+ $channels = @(
+   'https://t.me/cyberguru_ege',
+   'https://t.me/CyberGuruPython',
+@@ -29,19 +40,83 @@ $channels = @(
+ )
+ 
+ function Invoke-Step($title, [scriptblock]$sb) {
+-  Write-Host "`n=== $title ==="
++  Write-RunLog "=== $title ==="
+   & $sb
+ }
+ 
+ function Run-Cmd($exe, $argList, $cwd) {
++  Write-RunLog ("Run-Cmd: " + $exe + " " + ($argList -join ' '))
+   Push-Location $cwd
+   try {
+     & $exe @argList
+-    if ($LASTEXITCODE -ne 0) { throw "Command failed ($LASTEXITCODE): $exe $($argList -join ' ')" }
++    if ($LASTEXITCODE -ne 0) {
++      Write-RunLog ("Command failed ($LASTEXITCODE): $exe $($argList -join ' ')") 'ERROR'
++      throw "Command failed ($LASTEXITCODE): $exe $($argList -join ' ')"
++    }
+   }
+   finally { Pop-Location }
+ }
+ 
++function Get-ActiveTgParseProcesses {
++  # ╨Э╨░ Windows venv\Scripts\python.exe ╨╝╨╛╨╢╨╡╤В ╨┤╨░╨▓╨░╤В╤М ╨┐╨░╤А╤Г ╨┐╤А╨╛╤Ж╨╡╤Б╤Б╨╛╨▓ (launcher + child).
++  # ╨б╤З╨╕╤В╨░╨╡╨╝ ╤В╨╛╨╗╤М╨║╨╛ root-╨┐╤А╨╛╤Ж╨╡╤Б╤Б╤Л parse (╤З╨╡╨╣ ParentProcessId ╨╜╨╡ ╤Г╨║╨░╨╖╤Л╨▓╨░╨╡╤В ╨╜╨░ ╨┤╤А╤Г╨│╨╛╨╣ parse-╨┐╤А╨╛╤Ж╨╡╤Б╤Б).
++  $all = @(Get-CimInstance Win32_Process |
++    Where-Object {
++      $_.Name -eq 'python.exe' -and
++      $_.CommandLine -like '*telegram_parser_skill.py parse*'
++    })
++
++  if ($all.Count -eq 0) { return @() }
++
++  $ids = @($all | ForEach-Object { $_.ProcessId })
++  return @($all | Where-Object { $ids -notcontains $_.ParentProcessId })
++}
++
++function Run-TgParseCmd($exe, $argList, $cwd, $MaxAttempts = 2) {
++  $active = @(Get-ActiveTgParseProcesses)
++  Write-RunLog ("TG parse active root processes before start: " + $active.Count)
++  if ($active.Count -gt 0) {
++    Write-RunLog ("Detected active TG parse process(es): " + $active.Count + ". Abort to avoid sqlite lock.") 'ERROR'
++    throw "Detected active TG parse process(es): $($active.Count). Abort to avoid sqlite lock."
++  }
++
++  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
++    Push-Location $cwd
++    try {
++      $output = & $exe @argList 2>&1
++      $exitCode = $LASTEXITCODE
++    }
++    finally { Pop-Location }
++
++    if ($output) { $output | ForEach-Object { Write-Host $_ } }
++
++    if ($exitCode -eq 0 -or $exitCode -eq 2) {
++      if ($exitCode -eq 2) {
++        Write-RunLog "TG parse completed with partial status (exit 2). Continue pipeline." 'WARN'
++      }
++      return
++    }
++
++    $joined = ($output | Out-String)
++    $isDbLocked = $joined -match 'database is locked'
++
++    if ($isDbLocked -and $attempt -lt $MaxAttempts) {
++      Write-RunLog "TG parse sqlite lock detected. Retry in 20s (attempt $attempt/$MaxAttempts)..." 'WARN'
++      Start-Sleep -Seconds 20
++
++      $stillActive = @(Get-ActiveTgParseProcesses)
++      Write-RunLog ("TG parse active root processes before retry: " + $stillActive.Count)
++      if ($stillActive.Count -gt 0) {
++        Write-RunLog ("Retry blocked: active TG parse process(es) still running: " + $stillActive.Count) 'ERROR'
++        throw "Retry blocked: active TG parse process(es) still running: $($stillActive.Count)"
++      }
++      continue
++    }
++
++    throw "Command failed ($exitCode): $exe $($argList -join ' ')"
++  }
++}
++
+ if (-not $Since) {
+   if ($Mode -eq 'daily') {
+     $Since = (Get-Date).AddDays(-1).ToString('yyyy-MM-dd')
+@@ -52,6 +127,8 @@ if (-not $Since) {
+   }
+ }
+ if (-not $Until) { $Until = (Get-Date).ToString('yyyy-MM-dd') }
++Write-RunLog ("Pipeline started: mode=$Mode since=$Since until=$Until batch=$BatchCount delay=$DelaySec retries=$MaxRetries")
++Write-RunLog ("Pipeline log file: $pipelineLogFile")
+ 
+ Invoke-Step 'Preflight VK stats' {
+   Run-Cmd $vkPy @('main.py','stats') $vkRoot
+@@ -61,9 +138,9 @@ if (-not $SkipParse) {
+   Invoke-Step "TG parse ($Mode)" {
+     foreach ($ch in $channels) {
+       if ($Mode -eq 'backfill') {
+-        Run-Cmd $tgPy @('telegram_parser_skill.py','parse','--channel',$ch,'--date-from',$Since,'--date-to',$Until,'--output-dir','D:\work\TG_Parser\out') $tgRoot
++        Run-TgParseCmd $tgPy @('telegram_parser_skill.py','parse','--channel',$ch,'--date-from',$Since,'--date-to',$Until,'--output-dir','D:\work\TG_Parser\out') $tgRoot
+       } else {
+-        Run-Cmd $tgPy @('telegram_parser_skill.py','parse','--channel',$ch,'--output-dir','D:\work\TG_Parser\out') $tgRoot
++        Run-TgParseCmd $tgPy @('telegram_parser_skill.py','parse','--channel',$ch,'--output-dir','D:\work\TG_Parser\out') $tgRoot
+       }
+     }
+   }
+@@ -120,10 +197,33 @@ if (-not $SkipPreStep) {
+ # - keep global #noexport skip
+ # - no channel/date hardcoded exclusions (now handled by built-in skip workflow)
+ Invoke-Step 'Select eligible IDs by policy' {
+-  $sql = @"
++  $dbPath = Join-Path $vkRoot 'videos.db'
++  try { $dbPathAbs = (Resolve-Path -LiteralPath $vkRoot -ErrorAction Stop).Path } catch { $dbPathAbs = $vkRoot }
++  $dbPathAbs = Join-Path $dbPathAbs 'videos.db'
++  $dbExists = Test-Path -LiteralPath $dbPathAbs
++  Write-RunLog ("pwd=" + (Get-Location).Path + "; db_path=" + $dbPathAbs + "; db_exists=" + $dbExists)
++  $env:VK_IMPORTER_DB = $dbPathAbs
++  Push-Location $vkRoot
++  try {
++    $sql = @"
++import os
++import sys
+ import sqlite3
+-con=sqlite3.connect('videos.db')
+-cur=con.cursor()
++
++db_path = os.environ.get('VK_IMPORTER_DB', 'videos.db')
++db_path_abs = os.path.abspath(db_path)
++uri = 'file:' + db_path_abs.replace(chr(92), '/') + '?mode=rw'
++try:
++    con = sqlite3.connect(uri, uri=True)
++except sqlite3.OperationalError as e:
++    sys.stderr.write('DB path invalid or cannot open in rw mode: ' + db_path_abs + ' cwd=' + os.getcwd() + ' err=' + str(e) + chr(10))
++    sys.exit(1)
++cur = con.cursor()
++cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='videos'")
++if not cur.fetchone():
++    sys.stderr.write('Preflight failed: table videos not found. db_path=' + db_path_abs + ' cwd=' + os.getcwd() + chr(10))
++    con.close()
++    sys.exit(1)
+ since='$Since'
+ until='$Until'
+ rows=cur.execute('''
+@@ -139,16 +239,24 @@ print('\n'.join(str(r[0]) for r in rows))
+ print(f'__COUNT__={len(rows)}')
+ con.close()
+ "@
+-  $out = @'
++    $out = @'
+ '@ + $sql
+-  $result = $out | & $vkPy -
+-  if ($LASTEXITCODE -ne 0) { throw 'failed to query eligible ids' }
+-  $script:EligibleIds = @()
+-  foreach ($line in $result) {
+-    if ($line -match '^__COUNT__=') { $script:EligibleCount = [int]($line -replace '^__COUNT__=',''); continue }
+-    if ($line -match '^\d+$') { $script:EligibleIds += [int]$line }
++    $result = $out | & $vkPy -
++    if ($LASTEXITCODE -ne 0) { throw 'failed to query eligible ids' }
++    $script:EligibleIds = @()
++    foreach ($line in $result) {
++      if ($line -match '^__COUNT__=') { $script:EligibleCount = [int]($line -replace '^__COUNT__=',''); continue }
++      if ($line -match '^\d+$') { $script:EligibleIds += [int]$line }
++    }
++    Write-Host "Eligible by policy: $($script:EligibleCount)"
++  } finally {
++    Pop-Location
++    Remove-Item Env:VK_IMPORTER_DB -ErrorAction SilentlyContinue
+   }
+-  Write-Host "Eligible by policy: $($script:EligibleCount)"
++}
++
++Invoke-Step 'Preflight VK video' {
++  Run-Cmd $vkPy @('main.py','vk-preflight') $vkRoot
+ }
+ 
+ Invoke-Step 'Publish eligible IDs' {
+@@ -157,11 +265,21 @@ Invoke-Step 'Publish eligible IDs' {
+   $total = [Math]::Min($EligibleIds.Count, $BatchCount)
+   for ($i=0; $i -lt $total; $i++) {
+     $id = $EligibleIds[$i]
++    Push-Location $vkRoot
+     try {
+-      Run-Cmd $vkPy @('main.py','upload-one',$id,'--delay',$DelaySec,'--max-retries',$MaxRetries) $vkRoot
++      & $vkPy main.py upload-one $id --delay $DelaySec --max-retries $MaxRetries
++      $exit = $LASTEXITCODE
++    } finally {
++      Pop-Location
++    }
++    if ($exit -eq 3) {
++      Write-RunLog 'VK API 1051: stop batch (╨╝╨╡╤В╨╛╨┤ ╨╜╨╡╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ ╨┤╨╗╤П ╨┐╤А╨╛╤Д╨╕╨╗╤П/╤В╨╛╨║╨╡╨╜╨░)' 'ERROR'
++      throw 'VK API 1051: ╨╝╨╡╤В╨╛╨┤ ╨╜╨╡╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ ╨┤╨╗╤П ╨┤╨░╨╜╨╜╨╛╨│╨╛ ╨┐╤А╨╛╤Д╨╕╨╗╤П/╤В╨╛╨║╨╡╨╜╨░. ╨Я╨╡╤А╨╡╨▓╤Л╨┐╤Г╤Б╤В╨╕╤В╨╡ ╤В╨╛╨║╨╡╨╜ (user OAuth, ╨┐╤А╨░╨▓╨╛ video).'
++    }
++    if ($exit -eq 0) {
+       $published++
+-    } catch {
+-      Write-Host "Failed ID ${id}: $($_.Exception.Message)"
++    } else {
++      Write-Host "Failed ID ${id}: exit $exit"
+       $failed++
+     }
+   }
+@@ -171,5 +289,5 @@ Invoke-Step 'Publish eligible IDs' {
+ 
+ Invoke-Step 'Final stats' {
+   Run-Cmd $vkPy @('main.py','stats') $vkRoot
+-  Write-Host "`nPipeline summary: mode=$Mode since=$Since until=$Until eligible=$EligibleCount published=$Published failed=$Failed"
++  Write-RunLog ("Pipeline summary: mode=$Mode since=$Since until=$Until eligible=$EligibleCount published=$Published failed=$Failed")
+ }
+diff --git a/src/adapters/destinations/vk.py b/src/adapters/destinations/vk.py
+index fa9d4a2..6ca78a1 100644
+--- a/src/adapters/destinations/vk.py
++++ b/src/adapters/destinations/vk.py
+@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
+ 
+ from ..base import DestinationAdapter
+ from ...models.content import ContentItem, PublicationResult
++from ...publisher.vk_publisher import VKApi1051Error
+ 
+ if TYPE_CHECKING:
+     from ...publisher.vk_publisher import VKPublisher
+@@ -30,7 +31,14 @@ class VKDestinationAdapter(DestinationAdapter):
+                 ok=False,
+                 error_code="NO_VIDEO",
+             )
+-        url = self._publisher.publish(video_data)
++        try:
++            url = self._publisher.publish(video_data)
++        except VKApi1051Error:
++            return PublicationResult(
++                destination=self.destination_id,
++                ok=False,
++                error_code="VK_API_1051",
++            )
+         if url:
+             return PublicationResult(destination=self.destination_id, ok=True, remote_url=url)
+         return PublicationResult(
+diff --git a/src/app_context.py b/src/app_context.py
+index 7f93869..d5447f1 100644
+--- a/src/app_context.py
++++ b/src/app_context.py
+@@ -48,6 +48,11 @@ def get_vk_publisher(
+         except ValueError:
+             raise FatalUploadError(f"╨Э╨╡╨▓╨╡╤А╨╜╤Л╨╣ ╤Д╨╛╤А╨╝╨░╤В VK_GROUP_ID: {group_id_str}")
+ 
++    if group_id is not None:
++        logger.info(
++            "VK publisher: group_id=%s (╤В╨╛╨║╨╡╨╜ тАФ user OAuth ╤Б ╨┐╤А╨░╨▓╨╛╨╝ video, ╨╜╨╡ ╤Б╨╡╤А╨▓╨╕╤Б╨╜╤Л╨╣ ╨║╨╗╤О╤З)",
++            group_id,
++        )
+     try:
+         return VKPublisher(
+             access_token=access_token,
+diff --git a/src/publisher/vk_publisher.py b/src/publisher/vk_publisher.py
+index 3996f96..f56d151 100644
+--- a/src/publisher/vk_publisher.py
++++ b/src/publisher/vk_publisher.py
+@@ -21,6 +21,11 @@ class VKPublisherError(Exception):
+     pass
+ 
+ 
++class VKApi1051Error(VKPublisherError):
++    """╨Ю╤И╨╕╨▒╨║╨░ VK API 1051: ╨╝╨╡╤В╨╛╨┤ ╨╜╨╡╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ ╨┤╨╗╤П ╨┤╨░╨╜╨╜╨╛╨│╨╛ ╤В╨╕╨┐╨░ ╨┐╤А╨╛╤Д╨╕╨╗╤П/╤В╨╛╨║╨╡╨╜╨░ (╨╜╨╡ ╤В╤А╨░╨╜╨╖╨╕╨╡╨╜╤В╨╜╨░╤П, batch ╨╜╤Г╨╢╨╜╨╛ ╨┐╤А╨╡╤А╨▓╨░╤В╤М)."""
++    pass
++
++
+ class VKPublisher:
+     """╨Я╤Г╨▒╨╗╨╕╨║╨░╤В╨╛╤А ╨▓╨╕╨┤╨╡╨╛ ╨▓ VK Video ╤З╨╡╤А╨╡╨╖ VK API."""
+     
+@@ -71,6 +76,23 @@ class VKPublisher:
+         self._init_session(new_token)
+         logger.info("VK API: ╤В╨╛╨║╨╡╨╜ ╨╛╨▒╨╜╨╛╨▓╨╗╤С╨╜, ╤Б╨╡╤Б╤Б╨╕╤П ╨┐╨╡╤А╨╡╤Б╨╛╨╖╨┤╨░╨╜╨░")
+ 
++    def check_video_access(self) -> None:
++        """╨Я╤А╨╛╨▓╨╡╤А╨╕╤В╤М, ╤З╤В╨╛ ╤В╨╛╨║╨╡╨╜ ╨╝╨╛╨╢╨╡╤В ╨▓╤Л╨╖╤Л╨▓╨░╤В╤М video API ╨▓ ╨║╨╛╨╜╤В╨╡╨║╤Б╤В╨╡ ╨│╤А╤Г╨┐╨┐╤Л (preflight ╨┐╨╡╤А╨╡╨┤ batch).
++        ╨Я╤А╨╕ 1051 ╨▒╤А╨╛╤Б╨░╨╡╤В VKApi1051Error тАФ ╨╜╨╡ ╤А╨╡╤В╤А╨░╨╕╤В╤М, ╨┐╤А╨╡╤А╨▓╨░╤В╤М ╨┐╨░╨╣╨┐╨╗╨░╨╣╨╜."""
++        if not self.group_id:
++            logger.warning("check_video_access: group_id ╨╜╨╡ ╨╖╨░╨┤╨░╨╜, ╨┐╤А╨╛╨┐╤Г╤Б╨║ ╨┐╤А╨╛╨▓╨╡╤А╨║╨╕")
++            return
++        try:
++            self.vk.video.get(owner_id=-self.group_id, count=1)
++        except ApiError as e:
++            if e.code == 1051:
++                logger.error(
++                    "VK API 1051: ╨╝╨╡╤В╨╛╨┤ video ╨╜╨╡╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ ╨┤╨╗╤П ╨┤╨░╨╜╨╜╨╛╨│╨╛ ╤В╨╕╨┐╨░ ╨┐╤А╨╛╤Д╨╕╨╗╤П/╤В╨╛╨║╨╡╨╜╨░. "
++                    "╨Э╤Г╨╢╨╡╨╜ user OAuth ╤Б ╨┐╤А╨░╨▓╨╛╨╝ video, ╨╜╨╡ ╤Б╨╡╤А╨▓╨╕╤Б╨╜╤Л╨╣ ╨║╨╗╤О╤З."
++                )
++                raise VKApi1051Error("VK API 1051: Method is not available for this profile type") from e
++            raise
++
+     def _handle_api_error(self, error: Exception, attempt: int) -> bool:
+         """╨Ю╨▒╤А╨░╨▒╨╛╤В╨░╤В╤М ╨╛╤И╨╕╨▒╨║╤Г API ╨╕ ╨╛╨┐╤А╨╡╨┤╨╡╨╗╨╕╤В╤М, ╤Б╤В╨╛╨╕╤В ╨╗╨╕ ╨┐╨╛╨▓╤В╨╛╤А╤П╤В╤М ╨┐╨╛╨┐╤Л╤В╨║╤Г.
+         
+@@ -181,6 +203,10 @@ class VKPublisher:
+                 return video_url
+                     
+             except (VkApiError, ApiError) as e:
++                # 1051: ╨╝╨╡╤В╨╛╨┤ ╨╜╨╡╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ ╨┤╨╗╤П ╨┐╤А╨╛╤Д╨╕╨╗╤П/╤В╨╛╨║╨╡╨╜╨░ тАФ ╨╜╨╡ ╤А╨╡╤В╤А╨░╨╕╤В╤М, ╨┐╤А╨╡╤А╨▓╨░╤В╤М batch
++                if isinstance(e, ApiError) and e.code == 1051:
++                    logger.error("VK API 1051: ╨╝╨╡╤В╨╛╨┤ ╨╜╨╡╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ ╨┤╨╗╤П ╨┤╨░╨╜╨╜╨╛╨│╨╛ ╤В╨╕╨┐╨░ ╨┐╤А╨╛╤Д╨╕╨╗╤П/╤В╨╛╨║╨╡╨╜╨░ (╨╜╤Г╨╢╨╡╨╜ user OAuth ╤Б ╨┐╤А╨░╨▓╨╛╨╝ video)")
++                    raise VKApi1051Error("VK API 1051: Method is not available for this profile type") from e
+                 # ╨Ю╤И╨╕╨▒╨║╨░ 5: ╨╕╤Б╤В╤С╨║ ╤В╨╛╨║╨╡╨╜ тАФ ╨╛╨▒╨╜╨╛╨▓╨╗╤П╨╡╨╝ ╨╕ ╨┐╨╛╨▓╤В╨╛╤А╤П╨╡╨╝ ╨╛╨┤╨╕╨╜ ╤А╨░╨╖
+                 if isinstance(e, ApiError) and e.code == 5 and self.on_token_expired:
+                     new_token = self.on_token_expired()

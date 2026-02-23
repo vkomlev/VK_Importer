@@ -1,9 +1,12 @@
 """Контекст приложения: единая точка инициализации VK publisher (Phase 2). Убирает дубли env/publisher в CLI."""
 
+import logging
 from typing import Callable, Optional
 
 from .utils.env_utils import get_env_var
 from .publisher.vk_publisher import VKPublisher, VKPublisherError
+
+logger = logging.getLogger(__name__)
 
 
 class FatalUploadError(Exception):
@@ -48,6 +51,11 @@ def get_vk_publisher(
         except ValueError:
             raise FatalUploadError(f"Неверный формат VK_GROUP_ID: {group_id_str}")
 
+    if group_id is not None:
+        logger.info(
+            "VK publisher: group_id=%s (токен — user OAuth с правом video, не сервисный ключ)",
+            group_id,
+        )
     try:
         return VKPublisher(
             access_token=access_token,

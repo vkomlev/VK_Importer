@@ -21,6 +21,11 @@ class VKPublisherError(Exception):
     pass
 
 
+class VKApi1051Error(VKPublisherError):
+    """Ошибка VK API 1051: метод недоступен для данного типа профиля/токена (не транзиентная, batch нужно прервать)."""
+    pass
+
+
 class VKPublisher:
     """Публикатор видео в VK Video через VK API."""
     
@@ -70,6 +75,23 @@ class VKPublisher:
         self.access_token = new_token
         self._init_session(new_token)
         logger.info("VK API: токен обновлён, сессия пересоздана")
+
+    def check_video_access(self) -> None:
+        """Проверить, что токен может вызывать video API в контексте группы (preflight перед batch).
+        При 1051 бросает VKApi1051Error — не ретраить, прервать пайплайн."""
+        if not self.group_id:
+            logger.warning("check_video_access: group_id не задан, пропуск проверки")
+            return
+        try:
+            self.vk.video.get(owner_id=-self.group_id, count=1)
+        except ApiError as e:
+            if e.code == 1051:
+                logger.error(
+                    "VK API 1051: метод video недоступен для данного типа профиля/токена. "
+                    "Нужен user OAuth с правом video, не сервисный ключ."
+                )
+                raise VKApi1051Error("VK API 1051: Method is not available for this profile type") from e
+            raise
 
     def _handle_api_error(self, error: Exception, attempt: int) -> bool:
         """Обработать ошибку API и определить, стоит ли повторять попытку.
@@ -181,6 +203,10 @@ class VKPublisher:
                 return video_url
                     
             except (VkApiError, ApiError) as e:
+                # 1051: метод недоступен для профиля/токена — не ретраить, прервать batch
+                if isinstance(e, ApiError) and e.code == 1051:
+                    logger.error("VK API 1051: метод недоступен для данного типа профиля/токена (нужен user OAuth с правом video)")
+                    raise VKApi1051Error("VK API 1051: Method is not available for this profile type") from e
                 # Ошибка 5: истёк токен — обновляем и повторяем один раз
                 if isinstance(e, ApiError) and e.code == 5 and self.on_token_expired:
                     new_token = self.on_token_expired()

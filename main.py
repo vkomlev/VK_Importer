@@ -24,7 +24,7 @@ from src.storage.database import VideoStorage, VideoRecord
 from src.storage.job_queue import JobQueue, JobRecord
 from src.storage.scanner import VideoScanner
 from src.title_generators.factory import TitleGeneratorFactory
-from src.publisher.vk_publisher import VKPublisher
+from src.publisher.vk_publisher import VKPublisher, VKApi1051Error
 from src.utils.env_utils import get_env_var
 from src.models.video import VideoData
 from src.models.content import ContentItem
@@ -58,6 +58,7 @@ DEFAULT_UPLOAD_DELAY = 15.0
 EXIT_SUCCESS = 0
 EXIT_FATAL = 1
 EXIT_PARTIAL = 2
+EXIT_VK_CONTEXT = 3  # VK API 1051: метод недоступен для профиля/токена — прервать batch
 EXIT_INTERRUPTED = 130
 
 SUMMARY_FILE = Path("logs/last_summary.json")
@@ -458,7 +459,9 @@ def upload_one(video_id: int, delay: float, max_retries: int):
     uploaded = bool(record and record.video_url)
     stats = {"uploaded": uploaded, "video_id": video_id, "video_url": (record.video_url or "") if record else ""}
     if not ok and err:
-        # Операционная неудача публикации (publish -> None, NO_VIDEO и т.д.) = partial; конфиг/инициализация = fatal
+        if err == "VK_API_1051":
+            write_summary("upload-one", EXIT_VK_CONTEXT, stats, [], [err])
+            sys.exit(EXIT_VK_CONTEXT)
         exit_code = EXIT_PARTIAL if err in PARTIAL_UPLOAD_ERROR_CODES else EXIT_FATAL
         write_summary("upload-one", exit_code, stats, [], [err])
         sys.exit(exit_code)
@@ -677,6 +680,24 @@ def update_vk_titles(ids_file: str, delay: float):
     write_summary("update-vk-titles", EXIT_PARTIAL if failed else EXIT_SUCCESS, {"total": len(uploaded), "updated": ok, "failed": failed}, [], [])
     if failed:
         sys.exit(EXIT_PARTIAL)
+
+
+@cli.command("vk-preflight")
+def vk_preflight():
+    """Проверить, что токен и группа позволяют вызывать video API (перед batch upload). При 1051 — выход с ошибкой."""
+    try:
+        publisher = get_vk_publisher(0, 1, group_id_required=True, on_token_expired=_refresh_vk_token_callback)
+        publisher.check_video_access()
+    except FatalUploadError as e:
+        click.echo(f"ОШИБКА: {e.message}", err=True)
+        write_summary("vk-preflight", EXIT_FATAL, {}, [], [e.message])
+        sys.exit(EXIT_FATAL)
+    except VKApi1051Error as e:
+        click.echo(f"ОШИБКА VK 1051: {e}", err=True)
+        write_summary("vk-preflight", EXIT_FATAL, {}, [], [str(e)])
+        sys.exit(EXIT_FATAL)
+    write_summary("vk-preflight", EXIT_SUCCESS, {"ok": True}, [], [])
+    click.echo("VK video preflight OK.")
 
 
 def _upload_video(record: VideoRecord, storage: VideoStorage, delay: float, max_retries: int) -> tuple[bool, Optional[str]]:

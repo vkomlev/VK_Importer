@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from ..base import DestinationAdapter
 from ...models.content import ContentItem, PublicationResult
+from ...publisher.vk_publisher import VKApi1051Error
 
 if TYPE_CHECKING:
     from ...publisher.vk_publisher import VKPublisher
@@ -30,7 +31,14 @@ class VKDestinationAdapter(DestinationAdapter):
                 ok=False,
                 error_code="NO_VIDEO",
             )
-        url = self._publisher.publish(video_data)
+        try:
+            url = self._publisher.publish(video_data)
+        except VKApi1051Error:
+            return PublicationResult(
+                destination=self.destination_id,
+                ok=False,
+                error_code="VK_API_1051",
+            )
         if url:
             return PublicationResult(destination=self.destination_id, ok=True, remote_url=url)
         return PublicationResult(

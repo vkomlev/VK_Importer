@@ -1,0 +1,82 @@
+---
+name: techlead-code-reviewer
+description: "Perform a strict technical lead code review for production readiness with a PASS/FAIL decision. Use before integration to main/master, release candidate approval, risky refactors, schema migrations, and any change where correctness, architecture integrity, and reliability are critical."
+---
+
+# TechLead Code Reviewer
+
+## Review Scope
+Review for:
+- correctness and regressions
+- architecture and layering
+- SOLID and DRY adherence
+- clean code and maintainability
+- logging/observability quality
+- migration safety and rollback
+- test coverage adequacy
+- security and operational risk
+- critical UX/UI option correctness and navigation integrity
+- specification ambiguity and interpretation risks
+- date/time type safety in service logic and raw SQL result handling
+
+## Workflow
+1. Read changed files and identify affected runtime paths.
+2. Apply baseline checklist from [references/review-checklist.md](references/review-checklist.md).
+3. Apply domain checklists as relevant:
+- [references/architecture-checks.md](references/architecture-checks.md)
+- [references/migration-checks.md](references/migration-checks.md)
+- [references/testing-checks.md](references/testing-checks.md)
+- [references/observability-checks.md](references/observability-checks.md)
+- [references/security-checks.md](references/security-checks.md)
+- [references/ux-critical-checks.md](references/ux-critical-checks.md)
+- [references/spec-ambiguity-checks.md](references/spec-ambiguity-checks.md)
+- [references/datetime-type-safety-checks.md](references/datetime-type-safety-checks.md)
+4. For next/queue flows, verify rendered control set against spec: required controls visible, forbidden controls hidden.
+5. Classify findings by severity and impact.
+6. If findings indicate Cursor-agent mistakes, create error-log entries using [references/cursor-agent-error-loop.md](references/cursor-agent-error-loop.md).
+7. Produce PASS/FAIL with required fixes and validation commands.
+8. Add residual risk and post-merge watchpoints if PASS.
+
+## Output Contract
+- `Decision` (`PASS` or `FAIL`)
+- `Blocking Findings` (must-fix, ordered by severity)
+- `Non-Blocking Findings`
+- `Architecture Assessment`
+- `Migration Assessment` (if DB affected)
+- `Test Adequacy Assessment`
+- `Observability Assessment`
+- `Security Assessment`
+- `UX/UI Critical Assessment`
+- `Spec Ambiguity Assessment`
+- `Date/Time Type Safety Assessment`
+- `Required Fixes`
+- `Required Validation Commands`
+- `Residual Risks`
+- `Cursor Agent Error Entries` (one entry per significant Cursor-agent mistake)
+- `Skill Improvement Actions` (what to change in developer skills/rules to prevent recurrence)
+
+## Severity Model
+- `S1`: production outage/data loss/security breach risk.
+- `S2`: likely functional defect or significant rework risk.
+- `S3`: maintainability/readability debt with low immediate risk.
+
+## Decision Rules
+- `FAIL` if any `S1` remains unresolved.
+- `FAIL` if behavior is uncertain in a production-critical path.
+- `FAIL` if critical UX action is missing/broken/misdirected in actual user flow.
+- `FAIL` if next/queue happy path contains bypass controls that contradict minimal-flow spec.
+- `FAIL` if unresolved specification ambiguity can change behavior of critical path.
+- `FAIL` if migration rollback is missing for schema-affecting change.
+- `FAIL` if tests do not cover the changed behavior and key regressions.
+- `FAIL` if significant Cursor-agent mistakes are detected but not logged into project error register.
+- `PASS` only when no blocking issue remains and validation is reproducible.
+
+## Quality Rules
+- Every finding must include:
+- file/path
+- why it matters in production
+- concrete fix direction
+- Keep focus on defects and risks, not style-only commentary.
+- Prefer evidence-based claims (tests, logs, code path reasoning).
+- Treat repeated Cursor-agent mistakes as process defects: always produce preventive skill/rule updates.
+- For next/queue reviews, always state explicitly which controls are allowed and confirm forbidden controls are absent.

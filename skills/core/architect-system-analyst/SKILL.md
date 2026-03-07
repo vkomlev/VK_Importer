@@ -1,6 +1,6 @@
 ---
 name: architect-system-analyst
-description: Combine solution architecture and system analysis for small local projects: clarify business goals, keep architecture intentionally lightweight, formalize only essential contracts, and produce an implementation-ready plan with pragmatic risk controls.
+description: "Combine solution architecture and system analysis for small local projects: clarify business goals, keep architecture intentionally lightweight, formalize only essential contracts, and produce an implementation-ready plan with pragmatic risk controls."
 ---
 
 # Architect + System Analyst

@@ -1,262 +1,181 @@
-# ТЗ для Cursor-агента (VK_Importer): P0 Canonical Write-Path в Content Hub
+﻿# ТЗ для Cursor-агента (VK_Importer): P0 через общий infra-layer
 
-Дата: 2026-03-05  
-Основание: `D:\Work\ContentBackbone\docs\tech-spec-cursor-p0-vk-importer-v1.md`  
-Режим: `publisher-integration`  
-Язык реализации: Python (текущий стек `VK_Importer`)
+Дата: 2026-03-06  
+Основание (источник истины): `D:\Work\ContentBackbone\docs\tech-spec-cursor-p0-vk-importer-v1.md`
 
 ---
 
-## 1. Цель
+## 1. Objective
 
-После успешной публикации в VK добавлять/обновлять canonical-записи в PostgreSQL:
+В `VK_Importer` подключить запись publish-result в canonical storage (`content_hub.publication` + `content_hub.link_map`) **только через общий infra-layer** (`content_hub_client`) с поддержкой:
 
-- `content_hub.publication`
-- `content_hub.link_map`
-
-Свойства решения:
-
-1. Идемпотентность при ретраях/повторных прогонах.
-2. Dry-run режим для нового write-path.
-3. Наблюдаемость (structured logs + понятные ошибки DB записи).
-4. Без поломки текущего VK publish-потока.
+1. идемпотентности,
+2. dry-run,
+3. наблюдаемости.
 
 ---
 
-## 2. Контекст текущего проекта (важно для Cursor)
+## 2. Ключевое изменение относительно предыдущего ТЗ
 
-1. Публикация идет через `main.py` + `VKDestinationAdapter` (`src/adapters/destinations/vk.py`).
-2. Результат публикации уже унифицирован в `PublicationResult` (`src/models/content.py`).
-3. Fail-fast по VK 1051 и preflight уже реализованы:
-   - `main.py` (`vk-preflight`, `EXIT_VK_CONTEXT=3`)
-   - `scripts/run_tg_vk_video_pipeline.ps1` (preflight перед batch publish).
-4. Нельзя ломать:
-   - существующие коды выхода,
-   - preflight/retry логику,
-   - текущую запись статуса в SQLite (`videos.db`).
+Предыдущее ТЗ считается архитектурно ошибочным в части локальной DB-инфраструктуры внутри `VK_Importer`.
+
+Новый обязательный принцип:
+
+1. Никакого локального DAO/repository для canonical DB write в `VK_Importer`.
+2. Никаких прямых SQL-вставок в `publication/link_map`.
+3. Только вызовы общего `infra-layer` из `ContentBackbone`.
 
 ---
 
-## 3. In Scope / Out of Scope
+## 3. Context
+
+1. Текущий publish-путь в проекте:
+   - `main.py`
+   - `src/adapters/destinations/vk.py`
+   - `src/models/content.py` (`PublicationResult`)
+2. Preflight/fail-fast уже есть и не подлежит удалению:
+   - `main.py vk-preflight`
+   - `EXIT_VK_CONTEXT=3`
+   - preflight-шаг в `scripts/run_tg_vk_video_pipeline.ps1`
+3. DB schema `content_hub` должна быть уже применена по DB-ТЗ внешнего проекта.
+4. Общий `infra-layer` (`content_hub_client`) должен быть доступен как зависимость.
+
+---
+
+## 4. Domain Mode
+
+`publisher-integration`
+
+---
+
+## 5. Scope
 
 ### In Scope
 
-1. Canonical write-path в Postgres для publish-result.
-2. Репозиторий/DAO-слой для `content_hub.publication` и `content_hub.link_map`.
-3. Идемпотентный upsert.
-4. Dry-run для canonical write-path.
-5. Structured logs по canonical write.
-6. Smoke + repeat-smoke + dry-run проверки.
+1. Маппинг результата публикации в unified publish-result:
+   - `destination`, `remote_id`, `remote_url`, `published_at`, `status`, `error`.
+2. Вызов общего `infra-layer` для записи в `publication` и `link_map`.
+3. Корректное использование контрактов `infra-layer`:
+   - idempotent behavior,
+   - dry-run,
+   - logging contract.
+4. Structured logs доменного уровня:
+   - `run_id`, `global_uid`, `destination`, `status`, `error_class`.
 
 ### Out of Scope
 
-1. Миграции/изменение схемы `content_hub` (схема предполагается уже примененной).
-2. Изменения в `TG_Parser`.
-3. Рефактор всей CLI-архитектуры.
+1. Изменения в `TG_Parser`.
+2. Создание/изменение DB-схемы.
+3. `P1+` задачи.
+4. Реализация нового repository/DAO внутри `VK_Importer`.
+5. Локальная реализация upsert/retry/dry-run инфраструктуры в обход `infra-layer`.
 
 ### No-Touch
 
-1. Не удалять/не обходить `vk-preflight`.
-2. Не менять контракт `upload-one`/pipeline exit-codes в сторону несовместимости.
-3. Не вставлять SQL напрямую в боевой код без repository-слоя.
+1. Не ломать текущий publish flow в VK.
+2. Не убирать preflight/retry механизмы.
+3. Не менять рабочие exit-code контракты без необходимости.
 
 ---
 
-## 4. Целевой контракт данных
+## 6. Stack and Constraints
 
-Минимальный mapping publish-result -> canonical:
-
-1. `destination` -> `vk`
-2. `remote_url` -> URL опубликованного видео (`https://vk.com/video...`)
-3. `status`:
-   - `published` при `result.ok=True`
-   - `failed` при `result.ok=False`
-4. `error`:
-   - `error_code` из `PublicationResult.error_code` (если есть)
-5. `published_at`:
-   - UTC timestamp (при успехе)
-
-Требуется добавить вычисление:
-
-1. `global_uid` (стабильный source key для одного и того же объекта публикации)
-2. `remote_id` (парсинг из `remote_url`, если применимо; для VK: `owner_id_video_id`)
-
-Рекомендуемая стратегия `global_uid` (минимально инвазивно):
-
-1. База: `video_record.id` (когда публикуем из БД).
-2. Формат: `vk_importer:video_record:<id>`.
-3. Если `id` недоступен: fallback `vk_importer:path:<normalized_file_path>`.
+1. Python + текущий стек `VK_Importer`.
+2. PostgreSQL `content_hub` только через `content_hub_client`.
+3. Без прямого SQL и без локального DB write слоя для canonical.
+4. `published_at` в UTC.
 
 ---
 
-## 5. Технические требования реализации
+## 7. Required Rules
 
-## 5.1 Новые модули
-
-Добавить слой интеграции, например:
-
-1. `src/integrations/content_hub/models.py`
-2. `src/integrations/content_hub/repository.py`
-3. `src/integrations/content_hub/service.py`
-
-Допускается иная структура, но с разделением:
-
-1. Config/connection
-2. Repository (upsert API)
-3. Service (бизнес-мэппинг из publish-result)
-
-## 5.2 Конфигурация (env)
-
-Добавить безопасные флаги:
-
-1. `CONTENT_HUB_WRITE_ENABLED=0|1`
-2. `CONTENT_HUB_WRITE_DRY_RUN=0|1`
-3. `CONTENT_HUB_PG_DSN=postgresql://...` (или составные PG-переменные)
-
-Поведение:
-
-1. По умолчанию write-path выключен (`enabled=0`).
-2. При `enabled=1` и `dry_run=1` писать только логи, без commit.
-
-## 5.3 Идемпотентность
-
-Для `publication`:
-
-1. Upsert по ключу идемпотентности (по согласованному уникальному ключу схемы).
-2. Повторный запуск того же события не создает новую запись.
-
-Для `link_map`:
-
-1. Upsert source->destination связь.
-2. Повторный запуск обновляет/подтверждает связь, без дублей.
-
-## 5.4 Классификация DB-ошибок
-
-Минимум 2 класса:
-
-1. Retryable (временные сетевые/lock/connectivity).
-2. Non-retryable (schema mismatch, invalid payload, constraint misuse).
-
-В логах обязательно:
-
-1. `run_id`
-2. `global_uid`
-3. `destination`
-4. `status`
-5. `error_class`
-6. `dry_run`
+1. Сначала подключение `infra-layer`, затем доменный mapping.
+2. Классификация DB-ошибок делается в `infra-layer`; в `VK_Importer` только корректная обработка статусов/исключений клиента.
+3. Повторный запуск того же publish-события не создает дубликаты (подтверждается контрактом `infra-layer`).
+4. Любая попытка добавить локальный DAO/client для `content_hub` — нарушение ТЗ.
 
 ---
 
-## 6. Точки встраивания в текущий код
+## 8. Implementation Steps (для Cursor)
 
-Основной write-hook должен вызываться в post-publish участке, где уже есть:
-
-1. `VideoRecord` (или эквивалентный контекст source)
-2. `PublicationResult` из `VKDestinationAdapter.publish(...)`
-
-Критично:
-
-1. Нельзя менять бизнес-решение об успехе/провале загрузки в VK.
-2. Canonical write-path не должен ломать legacy-путь:
-   - при сбое canonical write — лог + контролируемое поведение по флагу (см. ниже).
-
-Режимы обработки сбоя canonical write:
-
-1. `strict=0` (по умолчанию): не валим upload-команду, только warning/error log.
-2. `strict=1` (опционально): трактуем как фатальную ошибку шага.
-
-Если `strict` будет добавлен, задокументировать и по умолчанию оставить `0`.
+1. Подключить зависимость `content_hub_client` в `VK_Importer`.
+2. Реализовать доменный mapping `PublicationResult` + контекст записи -> payload вызова `infra-layer`.
+3. Подключить вызов `infra-layer` в post-publish шаг (без изменения бизнес-логики публикации в VK).
+4. Поддержать dry-run режим через контракт/флаг `infra-layer`.
+5. Добавить smoke script на 1 публикацию.
+6. Добавить repeat-smoke script (повтор того же publish).
+7. Добавить проверку, что в кодовой базе не появился локальный canonical DAO/repository.
 
 ---
 
-## 7. План реализации (для Cursor)
+## 9. Navigation Contract
 
-1. Добавить env-конфиг и feature flags для canonical write-path.
-2. Добавить repository/DAO слой для `publication` и `link_map`.
-3. Добавить сервис мэппинга `VideoRecord + PublicationResult -> canonical payload`.
-4. Встроить вызов сервиса в post-publish путь (`upload-one` и batch-ветки через общий участок).
-5. Добавить dry-run режим (логирует payload/ключи, не пишет в БД).
-6. Добавить smoke script (1 публикация) и repeat-smoke (та же публикация повторно).
-7. Добавить dry-run smoke.
-8. Обновить docs с краткой инструкцией включения/отката.
+1. `VK_S0_CONTEXT` -> `VK_S1_ADAPTER_READY`
+2. `VK_S1_ADAPTER_READY` -> `VK_S2_WRITE_PATH_ENABLED`
+3. `VK_S2_WRITE_PATH_ENABLED` -> `VK_S3_DRY_RUN_OK`
+4. `VK_S3_DRY_RUN_OK` -> `VK_S4_SMOKE_OK`
+5. `VK_S4_SMOKE_OK` -> `VK_S5_IDEMPOTENCY_OK`
 
 ---
 
-## 8. Навигационный контракт (статусы выполнения)
+## 10. Forbidden Controls
 
-1. `VK_S0_CONTEXT` -> изучен контекст текущего publish flow.
-2. `VK_S1_ADAPTER_READY` -> добавлен canonical adapter/service слой.
-3. `VK_S2_WRITE_PATH_ENABLED` -> write-path подключен за feature flag.
-4. `VK_S3_DRY_RUN_OK` -> dry-run подтвержден.
-5. `VK_S4_SMOKE_OK` -> 1-й smoke подтвержден.
-6. `VK_S5_IDEMPOTENCY_OK` -> repeat-smoke без дублей подтвержден.
+1. Прямой INSERT/UPDATE в `publication`/`link_map` в обход `infra-layer`.
+2. Отключение dedup-проверок ради "быстрого фикса".
+3. Merge без smoke + repeat-smoke доказательства.
+4. Добавление дублирующего локального DB client/DAO для `content_hub` в `VK_Importer`.
 
 ---
 
-## 9. Acceptance Criteria
+## 11. Acceptance Criteria
 
-1. При успешной публикации в VK создается/обновляется запись в `content_hub.publication`.
-2. Создается/обновляется `content_hub.link_map` для source->VK.
-3. Повторный запуск того же publish не создает дублей.
-4. Dry-run не изменяет данные в Postgres.
-5. Structured logs содержат обязательные ключи.
-6. Текущий pipeline (`scan -> eligible -> vk-preflight -> upload-one`) продолжает работать.
-
----
-
-## 10. Validation / Smoke
-
-Команды проверки после реализации:
-
-1. `python -m py_compile <измененные_модули>`
-2. `python main.py vk-preflight`
-3. `<команда_smoke_publish_limit_1>` при `CONTENT_HUB_WRITE_ENABLED=1`
-4. Повтор пункта 3 (repeat-smoke)
-5. Пункт 3 с `CONTENT_HUB_WRITE_DRY_RUN=1`
-6. SQL-проверки в Postgres:
-   - запись в `publication` создана/обновлена
-   - запись в `link_map` создана/обновлена
-   - после repeat-smoke дублей нет
-   - после dry-run изменений нет
-
-Примечание: использовать реальные команды проекта, без псевдо-плейсхолдеров, в финальном отчете Cursor.
+1. После успешного publish через `infra-layer` создается/обновляется запись `publication`.
+2. Для опубликованного объекта через `infra-layer` создается/обновляется `link_map`.
+3. Повторный запуск не создает дублей.
+4. Dry-run не пишет в БД.
+5. Логи содержат обязательные ключи (`run_id`, `global_uid`, `destination`, `status`, `error_class`).
+6. Legacy publish-путь в VK продолжает работать.
+7. В проекте отсутствует локальный canonical DAO/repository слой.
 
 ---
 
-## 11. Handoff-артефакты от Cursor
+## 12. Validation Commands
 
-1. Diff по измененным модулям `VK_Importer`.
-2. Явный mapping полей в canonical payload.
+1. `python -m py_compile <vk_importer_changed_modules>`
+2. `<vk_importer_command> --smoke --limit 1`
+3. `<vk_importer_command> --smoke --limit 1` (повтор)
+4. `<vk_importer_command> --smoke --limit 1 --dry-run`
+5. `<db_query_check_publication_and_link_map>`
+6. `<code_search_command_forbidden_local_dao>`
+
+Expected:
+
+1. 1-й smoke создает/обновляет записи.
+2. 2-й smoke не создает дублей.
+3. dry-run не меняет состояние БД.
+4. В кодовой базе `VK_Importer` нет локального canonical DB write слоя.
+
+---
+
+## 13. Handoff Artifacts
+
+1. Diff по модулям `VK_Importer`.
+2. Mapping publish-result -> API `infra-layer` -> `publication/link_map`.
 3. Логи smoke/repeat-smoke/dry-run.
-4. Короткий runbook:
-   - как включить write-path,
-   - как включить dry-run,
-   - как откатить (выключить флаг).
+4. Короткая инструкция включения/отката write-path.
+5. Подтверждение отсутствия локального DAO/repository дублирования.
 
 ---
 
-## 12. Риски и откат
+## 14. Risks and Rollback
 
-Риски:
-
-1. Дубли в canonical-таблицах.
-2. Рассинхрон source->destination link.
-3. Ложные фейлы пайплайна из-за недоступности Postgres.
-
-Контроль:
-
-1. Upsert + уникальные ключи.
-2. Repeat-smoke на тех же данных.
-3. Нестрогий режим (`strict=0`) по умолчанию.
-
-Откат:
-
-1. `CONTENT_HUB_WRITE_ENABLED=0`
-2. Возврат к текущему legacy publish без canonical write.
+1. Риск дублей или рассинхрона link_map.
+2. Риск drift между проектами при обходе `infra-layer`.
+3. Контроль: единый `infra-layer` + repeat-smoke + code search на запрет локального DAO.
+4. Rollback: выключить feature flag write-path, вернуть legacy publish-режим, зафиксировать incident.
 
 ---
 
-## 13. Уточнение по skill
+## 15. Примечание по skills
 
-Запрошенный skill `tech-spec-composer` не был доступен в списке skills текущей сессии, поэтому ТЗ составлено вручную в проектном формате с привязкой к фактическому коду репозитория.
+Запрошенный skill `tech-spec-composer` не был доступен в списке skills текущей сессии, поэтому ТЗ обновлено вручную по внешнему документу-источнику истины.

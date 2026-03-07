@@ -1,0 +1,447 @@
+﻿diff --git a/docs/CONTENT-HUB-RUNBOOK.md b/docs/CONTENT-HUB-RUNBOOK.md
+new file mode 100644
+index 0000000..490f685
+--- /dev/null
++++ b/docs/CONTENT-HUB-RUNBOOK.md
+@@ -0,0 +1,67 @@
++# Content Hub canonical write-path: runbook
++
++╨Ф╨░╤В╨░: 2026-03-05  
++╨б╨▓╤П╨╖╨░╨╜╨╛: [TECH-SPEC-CURSOR-P0-VK-IMPORTER-CANONICAL-WRITEPATH-v1.md](TECH-SPEC-CURSOR-P0-VK-IMPORTER-CANONICAL-WRITEPATH-v1.md)
++
++## ╨Я╨╡╤А╨╡╨╝╨╡╨╜╨╜╤Л╨╡ ╨╛╨║╤А╤Г╨╢╨╡╨╜╨╕╤П
++
++| ╨Я╨╡╤А╨╡╨╝╨╡╨╜╨╜╨░╤П | ╨Ч╨╜╨░╤З╨╡╨╜╨╕╨╡ | ╨Ю╨┐╨╕╤Б╨░╨╜╨╕╨╡ |
++|------------|----------|----------|
++| `CONTENT_HUB_WRITE_ENABLED` | `0` (╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) / `1` | ╨Т╨║╨╗╤О╤З╨╕╤В╤М ╨╖╨░╨┐╨╕╤Б╤М ╨▓ `content_hub.publication` ╨╕ `content_hub.link_map` ╨┐╨╛╤Б╨╗╨╡ ╨║╨░╨╢╨┤╨╛╨╣ ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕ ╨▓ VK. |
++| `CONTENT_HUB_WRITE_DRY_RUN` | `0` (╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) / `1` | ╨а╨╡╨╢╨╕╨╝ dry-run: ╨╗╨╛╨│╨╕╤А╨╛╨▓╨░╤В╤М payload ╨╕ ╨║╨╗╤О╤З╨╕, **╨╜╨╡** ╨▓╤Л╨┐╨╛╨╗╨╜╤П╤В╤М INSERT/UPDATE ╨▓ Postgres. |
++| `CONTENT_HUB_WRITE_STRICT` | `0` (╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О) / `1` | ╨Я╤А╨╕ `1`: ╤Б╨▒╨╛╨╣ canonical write ╤Б╤З╨╕╤В╨░╨╡╤В╤Б╤П ╤Д╨░╤В╨░╨╗╤М╨╜╨╛╨╣ ╨╛╤И╨╕╨▒╨║╨╛╨╣ ╤И╨░╨│╨░ (upload ╨┐╤А╨╡╤А╤Л╨▓╨░╨╡╤В╤Б╤П). |
++| `CONTENT_HUB_PG_DSN` | `postgresql://user:pass@host:port/dbname` | DSN ╨┐╨╛╨┤╨║╨╗╤О╤З╨╡╨╜╨╕╤П ╨║ PostgreSQL. |
++| ╨Р╨╗╤М╤В╨╡╤А╨╜╨░╤В╨╕╨▓╨░ DSN | `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | ╨б╨╛╨▒╤А╨░╤В╤М DSN ╨╕╨╖ ╤Б╨╛╤Б╤В╨░╨▓╨╜╤Л╤Е ╨┐╨╡╤А╨╡╨╝╨╡╨╜╨╜╤Л╤Е (╨╡╤Б╨╗╨╕ `CONTENT_HUB_PG_DSN` ╨╜╨╡ ╨╖╨░╨┤╨░╨╜). |
++
++## ╨Ъ╨░╨║ ╨▓╨║╨╗╤О╤З╨╕╤В╤М write-path
++
++1. ╨г╨▒╨╡╨┤╨╕╤В╨╡╤Б╤М, ╤З╤В╨╛ ╤Б╤Е╨╡╨╝╨░ `content_hub` ╨╕ ╤В╨░╨▒╨╗╨╕╤Ж╤Л `publication`, `link_map` ╨┐╤А╨╕╨╝╨╡╨╜╨╡╨╜╤Л ╨▓ ╨С╨Ф (╨╝╨╕╨│╤А╨░╤Ж╨╕╨╕ Content Backbone).
++2. ╨Т `.env` ╨╕╨╗╨╕ ╨▓ ╨╛╨║╤А╤Г╨╢╨╡╨╜╨╕╨╕ ╨╖╨░╨┤╨░╨╣╤В╨╡:
++   - `CONTENT_HUB_WRITE_ENABLED=1`
++   - `CONTENT_HUB_PG_DSN=postgresql://...` (╨╕╨╗╨╕ PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD)
++3. ╨Ч╨░╨┐╤Г╤Б╨║╨░╨╣╤В╨╡ ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╤О ╨║╨░╨║ ╨╛╨▒╤Л╤З╨╜╨╛: `python main.py upload-one <id>`, ╨┐╨░╨╣╨┐╨╗╨░╨╣╨╜ ╨╕ ╤В.╨┤. ╨Я╨╛╤Б╨╗╨╡ ╨║╨░╨╢╨┤╨╛╨╣ ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕ (╤Г╤Б╨┐╨╡╤И╨╜╨╛╨╣ ╨╕╨╗╨╕ ╨╜╨╡╤В) ╨▒╤Г╨┤╨╡╤В ╨▓╤Л╨┐╨╛╨╗╨╜╤П╤В╤М╤Б╤П upsert ╨▓ Content Hub.
++
++## ╨Ъ╨░╨║ ╨▓╨║╨╗╤О╤З╨╕╤В╤М dry-run
++
++1. ╨Ч╨░╨┤╨░╨╣╤В╨╡ `CONTENT_HUB_WRITE_DRY_RUN=1` (╨╕ ╨┐╤А╨╕ ╨╜╨╡╨╛╨▒╤Е╨╛╨┤╨╕╨╝╨╛╤Б╤В╨╕ `CONTENT_HUB_WRITE_ENABLED=1`).
++2. ╨Я╤А╨╕ ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕ ╨▓ ╨╗╨╛╨│╨░╤Е ╨┐╨╛╤П╨▓╤П╤В╤Б╤П ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╤П ╨▓╨╕╨┤╨░ `[dry-run] publication upsert skipped`, ╨┤╨░╨╜╨╜╤Л╨╡ ╨▓ Postgres **╨╜╨╡** ╨╕╨╖╨╝╨╡╨╜╤П╤О╤В╤Б╤П.
++
++## ╨Ъ╨░╨║ ╨╛╤В╨║╨░╤В╨╕╤В╤М
++
++1. ╨г╤Б╤В╨░╨╜╨╛╨▓╨╕╤В╨╡ `CONTENT_HUB_WRITE_ENABLED=0` (╨╕╨╗╨╕ ╤Г╨┤╨░╨╗╨╕╤В╨╡ ╨┐╨╡╤А╨╡╨╝╨╡╨╜╨╜╤Г╤О).
++2. ╨Я╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╤П ╨▓ VK ╨╕ ╨╖╨░╨┐╨╕╤Б╤М ╨▓ SQLite (`videos.db`) ╨┐╤А╨╛╨┤╨╛╨╗╨╢╨░╤О╤В ╤А╨░╨▒╨╛╤В╨░╤В╤М ╨║╨░╨║ ╤А╨░╨╜╤М╤И╨╡; ╨╖╨░╨┐╨╕╤Б╤М ╨▓ Content Hub ╨╜╨╡ ╨▓╤Л╨┐╨╛╨╗╨╜╤П╨╡╤В╤Б╤П.
++
++## Mapping ╨┐╨╛╨╗╨╡╨╣ (canonical payload)
++
++| ╨Ш╤Б╤В╨╛╤З╨╜╨╕╨║ | ╨Я╨╛╨╗╨╡ canonical | ╨Ъ╨╛╨╝╨╝╨╡╨╜╤В╨░╤А╨╕╨╣ |
++|----------|----------------|-------------|
++| VideoRecord.id | `global_uid` (publication), `source_global_uid` (link_map) | ╨д╨╛╤А╨╝╨░╤В: `vk_importer:video_record:<id>`. Fallback: `vk_importer:path:<normalized_file_path>`. |
++| PublicationResult.destination | `destination` | `vk`. |
++| PublicationResult.remote_url | `remote_url` | URL ╨▓╨╕╨┤╨╡╨╛ ╨▓ VK. |
++| ╨Я╨░╤А╤Б╨╕╨╜╨│ remote_url | `remote_id` | ╨д╨╛╤А╨╝╨░╤В VK: `owner_id_video_id` (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А `-12345_67890`). |
++| PublicationResult.ok | `status` | `published` ╨┐╤А╨╕ ok=True, `failed` ╨┐╤А╨╕ ok=False. |
++| PublicationResult.error_code | `error` | ╨Я╤А╨╕ status=failed. |
++| ╨Т╤А╨╡╨╝╤П ╨┐╤А╨╕ ╤Г╤Б╨┐╨╡╤Е╨╡ | `published_at` | UTC timestamptz. |
++
++## ╨д╨░╨║╤В╨╕╤З╨╡╤Б╨║╨░╤П ╤Б╤Е╨╡╨╝╨░ PostgreSQL (╨С╨Ф Learn, schema content_hub)
++
++╨Я╨╛╨╗╤Г╤З╨╡╨╜╨╛ ╤З╨╡╤А╨╡╨╖ MCP (user-postgres). ╨в╨░╨▒╨╗╨╕╤Ж╤Л:
++
++**content_hub.publication**  
++╨Ъ╨╛╨╗╨╛╨╜╨║╨╕: id (bigint), global_uid (text NOT NULL), destination (text NOT NULL), remote_id, remote_url, published_at (timestamptz), status, error, created_at, updated_at (default now()).  
++╨г╨╜╨╕╨║╨░╨╗╤М╨╜╤Л╨╣ ╨╕╨╜╨┤╨╡╨║╤Б: `ix_content_hub_publication_global_uid_destination (global_uid, destination)`.
++
++**content_hub.link_map**  
++╨Ъ╨╛╨╗╨╛╨╜╨║╨╕: id (bigint), **source_global_uid** (text NOT NULL), destination (text NOT NULL), remote_id, remote_url, created_at (default now()).  
++╨Ъ╨╛╨╗╨╛╨╜╨║╨╕ **updated_at ╨╜╨╡╤В**.  
++╨г╨╜╨╕╨║╨░╨╗╤М╨╜╤Л╨╣ ╨╕╨╜╨┤╨╡╨║╤Б: `ix_content_hub_link_map_source_dest (source_global_uid, destination)`.
++
++╨Ф╨╗╤П ╨╖╨░╨┐╨╕╤Б╨╕ ╨▓ ╨С╨Ф Learn ╤Г╨║╨░╨╢╨╕╤В╨╡ ╨▓ DSN ╨╕╨╝╤П ╨▒╨░╨╖╤Л: `postgresql://...@host:port/Learn`.
++
++## ╨Т╨░╨╗╨╕╨┤╨░╤Ж╨╕╤П ╨┐╨╛╤Б╨╗╨╡ ╨▓╨╜╨╡╨┤╤А╨╡╨╜╨╕╤П
++
++1. `python -m py_compile main.py src/integrations/content_hub/models.py src/integrations/content_hub/repository.py src/integrations/content_hub/service.py`
++2. `python main.py vk-preflight`
++3. Smoke: ╨╛╨┤╨╕╨╜ ╤А╨░╨╖ `CONTENT_HUB_WRITE_ENABLED=1 python main.py upload-one <id>` (╨┐╨╛╨┤╤Б╤В╨░╨▓╨╕╤В╤М ╤А╨╡╨░╨╗╤М╨╜╤Л╨╣ ID).
++4. Repeat-smoke: ╤Б╨╜╨╛╨▓╨░ `upload-one <id>` тАФ ╨┤╤Г╨▒╨╗╨╡╨╣ ╨▓ `publication`/`link_map` ╨▒╤Л╤В╤М ╨╜╨╡ ╨┤╨╛╨╗╨╢╨╜╨╛ (upsert).
++5. Dry-run: `CONTENT_HUB_WRITE_DRY_RUN=1 CONTENT_HUB_WRITE_ENABLED=1 python main.py upload-one <id>` тАФ ╨▓ ╨╗╨╛╨│╨░╤Е dry-run, ╨▓ ╨С╨Ф ╨╕╨╖╨╝╨╡╨╜╨╡╨╜╨╕╨╣ ╨╜╨╡╤В.
+diff --git a/src/integrations/content_hub/models.py b/src/integrations/content_hub/models.py
+new file mode 100644
+index 0000000..d4386e2
+--- /dev/null
++++ b/src/integrations/content_hub/models.py
+@@ -0,0 +1,76 @@
++"""╨Ь╨╛╨┤╨╡╨╗╨╕ ╨╕ ╨║╨╛╨╜╤Д╨╕╨│╤Г╤А╨░╤Ж╨╕╤П Content Hub write-path.
++
++╨д╨░╨║╤В╨╕╤З╨╡╤Б╨║╨░╤П ╤Б╤Е╨╡╨╝╨░ (╨С╨Ф Learn, schema content_hub, ╨┐╨╛╨╗╤Г╤З╨╡╨╜╨░ ╤З╨╡╤А╨╡╨╖ MCP):
++  content_hub.publication:
++    id BIGINT, global_uid TEXT NOT NULL, destination TEXT NOT NULL,
++    remote_id TEXT, remote_url TEXT, published_at TIMESTAMPTZ, status TEXT, error TEXT,
++    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
++    UNIQUE ix_content_hub_publication_global_uid_destination (global_uid, destination)
++
++  content_hub.link_map:
++    id BIGINT, source_global_uid TEXT NOT NULL, destination TEXT NOT NULL,
++    remote_id TEXT, remote_url TEXT,
++    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
++    UNIQUE ix_content_hub_link_map_source_dest (source_global_uid, destination)
++  (╨║╨╛╨╗╨╛╨╜╨║╨╕ updated_at ╨▓ link_map ╨╜╨╡╤В)
++"""
++
++import os
++from dataclasses import dataclass, field
++from datetime import datetime, timezone
++from pathlib import Path
++from typing import Optional
++
++from src.utils.env_utils import get_env_var
++
++
++@dataclass
++class ContentHubConfig:
++    """╨Ъ╨╛╨╜╤Д╨╕╨│╤Г╤А╨░╤Ж╨╕╤П ╨╖╨░╨┐╨╕╤Б╨╕ ╨▓ Content Hub (╨╕╨╖ env)."""
++
++    enabled: bool = False
++    dry_run: bool = False
++    strict: bool = False  # ╨Я╤А╨╕ True ╤Б╨▒╨╛╨╣ canonical write = ╤Д╨░╤В╨░╨╗╤М╨╜╨░╤П ╨╛╤И╨╕╨▒╨║╨░ ╤И╨░╨│╨░
++    dsn: Optional[str] = None
++
++    @classmethod
++    def from_env(cls, env_path: Optional[Path] = None) -> "ContentHubConfig":
++        enabled = (get_env_var("CONTENT_HUB_WRITE_ENABLED", "0", env_path) or "0").strip() == "1"
++        dry_run = (get_env_var("CONTENT_HUB_WRITE_DRY_RUN", "0", env_path) or "0").strip() == "1"
++        strict = (get_env_var("CONTENT_HUB_WRITE_STRICT", "0", env_path) or "0").strip() == "1"
++        dsn = get_env_var("CONTENT_HUB_PG_DSN", env_path=env_path)
++        if not dsn and (get_env_var("PGHOST", env_path=env_path) or os.getenv("PGHOST")):
++            # ╨б╨╛╨▒╨╕╤А╨░╨╡╨╝ DSN ╨╕╨╖ ╤Б╨╛╤Б╤В╨░╨▓╨╜╤Л╤Е ╨┐╨╡╤А╨╡╨╝╨╡╨╜╨╜╤Л╤Е
++            host = get_env_var("PGHOST", env_path=env_path) or os.getenv("PGHOST", "")
++            port = get_env_var("PGPORT", env_path=env_path) or os.getenv("PGPORT", "5432")
++            dbname = get_env_var("PGDATABASE", env_path=env_path) or os.getenv("PGDATABASE", "content_hub")
++            user = get_env_var("PGUSER", env_path=env_path) or os.getenv("PGUSER", "")
++            password = get_env_var("PGPASSWORD", env_path=env_path) or os.getenv("PGPASSWORD", "")
++            if user and password:
++                dsn = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
++            else:
++                dsn = f"postgresql://{host}:{port}/{dbname}" if host else None
++        return cls(enabled=enabled, dry_run=dry_run, strict=strict, dsn=dsn)
++
++
++@dataclass
++class PublicationPayload:
++    """╨Ф╨░╨╜╨╜╤Л╨╡ ╨┤╨╗╤П upsert ╨▓ content_hub.publication."""
++
++    global_uid: str
++    destination: str
++    remote_url: Optional[str] = None
++    remote_id: Optional[str] = None
++    status: str = "failed"  # published | failed
++    error: Optional[str] = None
++    published_at: Optional[datetime] = None
++
++
++@dataclass
++class LinkMapPayload:
++    """╨Ф╨░╨╜╨╜╤Л╨╡ ╨┤╨╗╤П upsert ╨▓ content_hub.link_map (╨║╨╛╨╗╨╛╨╜╨║╨░ source_global_uid)."""
++
++    source_global_uid: str
++    destination: str
++    remote_id: Optional[str] = None
++    remote_url: Optional[str] = None
+diff --git a/src/integrations/content_hub/repository.py b/src/integrations/content_hub/repository.py
+new file mode 100644
+index 0000000..62bfd52
+--- /dev/null
++++ b/src/integrations/content_hub/repository.py
+@@ -0,0 +1,188 @@
++"""DAO ╨┤╨╗╤П content_hub.publication ╨╕ content_hub.link_map (PostgreSQL)."""
++
++import logging
++import uuid
++from datetime import datetime, timezone
++from typing import Optional
++
++from .models import ContentHubConfig, LinkMapPayload, PublicationPayload
++
++logger = logging.getLogger(__name__)
++
++# ╨Ъ╨╗╨░╤Б╤Б╤Л ╨╛╤И╨╕╨▒╨╛╨║ ╨С╨Ф ╨┤╨╗╤П ╨║╨╗╨░╤Б╤Б╨╕╤Д╨╕╨║╨░╤Ж╨╕╨╕ (╨в╨Ч 5.4)
++RETRYABLE_EXCEPTIONS = (
++    "OperationalError",
++    "InterfaceError",
++    "connection",
++    "timeout",
++    "could not connect",
++    "connection reset",
++    "deadlock",
++)
++NON_RETRYABLE_EXCEPTIONS = (
++    "IntegrityError",
++    "ProgrammingError",
++    "DataError",
++    "unique constraint",
++    "duplicate key",
++    "column",
++    "relation \"content_hub",
++)
++
++
++def _error_class(exc: Exception) -> str:
++    """╨Ъ╨╗╨░╤Б╤Б╨╕╤Д╨╕╤Ж╨╕╤А╨╛╨▓╨░╤В╤М ╨╛╤И╨╕╨▒╨║╤Г: retryable / non_retryable."""
++    msg = (str(exc) or "").lower()
++    name = type(exc).__name__
++    for s in NON_RETRYABLE_EXCEPTIONS:
++        if s.lower() in msg or s in name:
++            return "non_retryable"
++    for s in RETRYABLE_EXCEPTIONS:
++        if s.lower() in msg or s in name:
++            return "retryable"
++    return "unknown"
++
++
++def _log_canonical(
++    run_id: str,
++    global_uid: str,
++    destination: str,
++    status: str,
++    error_class: Optional[str] = None,
++    dry_run: bool = False,
++    message: str = "",
++    level: int = logging.INFO,
++) -> None:
++    """Structured log ╨┐╨╛ ╨в╨Ч 5.4."""
++    extra = {
++        "run_id": run_id,
++        "global_uid": global_uid,
++        "destination": destination,
++        "status": status,
++        "error_class": error_class,
++        "dry_run": dry_run,
++    }
++    logger.log(level, "content_hub canonical write: %s", message or "ok", extra=extra)
++
++
++class ContentHubRepository:
++    """╨а╨╡╨┐╨╛╨╖╨╕╤В╨╛╤А╨╕╨╣ ╨┤╨╗╤П upsert ╨▓ content_hub.publication ╨╕ content_hub.link_map."""
++
++    def __init__(self, config: ContentHubConfig, run_id: Optional[str] = None):
++        self.config = config
++        self.run_id = run_id or str(uuid.uuid4())[:8]
++
++    def _conn(self):
++        if not self.config.dsn:
++            raise ValueError("CONTENT_HUB_PG_DSN ╨╜╨╡ ╨╖╨░╨┤╨░╨╜")
++        try:
++            import psycopg2
++            return psycopg2.connect(self.config.dsn)
++        except Exception as e:
++            cls = _error_class(e)
++            _log_canonical(
++                self.run_id, "", "vk", "failed",
++                error_class=cls, dry_run=self.config.dry_run,
++                message=f"connect failed: {e}", level=logging.ERROR,
++            )
++            raise
++
++    def upsert_publication(self, payload: PublicationPayload) -> None:
++        """╨Ш╨┤╨╡╨╝╨┐╨╛╤В╨╡╨╜╤В╨╜╤Л╨╣ upsert ╨▓ content_hub.publication ╨┐╨╛ (global_uid, destination)."""
++        if self.config.dry_run:
++            _log_canonical(
++                self.run_id, payload.global_uid, payload.destination, payload.status,
++                dry_run=True, message="[dry-run] publication upsert skipped",
++            )
++            return
++        conn = self._conn()
++        try:
++            with conn.cursor() as cur:
++                now = datetime.now(timezone.utc)
++                cur.execute(
++                    """
++                    INSERT INTO content_hub.publication
++                    (global_uid, destination, remote_url, remote_id, status, error, published_at, created_at, updated_at)
++                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
++                    ON CONFLICT (global_uid, destination) DO UPDATE SET
++                    remote_url = EXCLUDED.remote_url,
++                    remote_id = EXCLUDED.remote_id,
++                    status = EXCLUDED.status,
++                    error = EXCLUDED.error,
++                    published_at = EXCLUDED.published_at,
++                    updated_at = EXCLUDED.updated_at
++                    """,
++                    (
++                        payload.global_uid,
++                        payload.destination,
++                        payload.remote_url,
++                        payload.remote_id,
++                        payload.status,
++                        payload.error,
++                        payload.published_at,
++                        now,
++                        now,
++                    ),
++                )
++            conn.commit()
++            _log_canonical(
++                self.run_id, payload.global_uid, payload.destination, payload.status,
++                dry_run=False, message="publication upserted",
++            )
++        except Exception as e:
++            conn.rollback()
++            cls = _error_class(e)
++            _log_canonical(
++                self.run_id, payload.global_uid, payload.destination, "failed",
++                error_class=cls, dry_run=False, message=f"publication upsert failed: {e}",
++                level=logging.ERROR,
++            )
++            raise
++        finally:
++            conn.close()
++
++    def upsert_link_map(self, payload: LinkMapPayload) -> None:
++        """╨Ш╨┤╨╡╨╝╨┐╨╛╤В╨╡╨╜╤В╨╜╤Л╨╣ upsert ╨▓ content_hub.link_map ╨┐╨╛ (source_global_uid, destination). ╨С╨╡╨╖ updated_at (╨║╨╛╨╗╨╛╨╜╨║╨╕ ╨╜╨╡╤В ╨▓ ╤Б╤Е╨╡╨╝╨╡)."""
++        if self.config.dry_run:
++            _log_canonical(
++                self.run_id, payload.source_global_uid, payload.destination, "link_map",
++                dry_run=True, message="[dry-run] link_map upsert skipped",
++            )
++            return
++        conn = self._conn()
++        try:
++            with conn.cursor() as cur:
++                now = datetime.now(timezone.utc)
++                cur.execute(
++                    """
++                    INSERT INTO content_hub.link_map
++                    (source_global_uid, destination, remote_id, remote_url, created_at)
++                    VALUES (%s, %s, %s, %s, %s)
++                    ON CONFLICT (source_global_uid, destination) DO UPDATE SET
++                    remote_id = EXCLUDED.remote_id,
++                    remote_url = EXCLUDED.remote_url
++                    """,
++                    (
++                        payload.source_global_uid,
++                        payload.destination,
++                        payload.remote_id,
++                        payload.remote_url,
++                        now,
++                    ),
++                )
++            conn.commit()
++            _log_canonical(
++                self.run_id, payload.source_global_uid, payload.destination, "link_map",
++                dry_run=False, message="link_map upserted",
++            )
++        except Exception as e:
++            conn.rollback()
++            cls = _error_class(e)
++            _log_canonical(
++                self.run_id, payload.source_global_uid, payload.destination, "failed",
++                error_class=cls, dry_run=False, message=f"link_map upsert failed: {e}",
++                level=logging.ERROR,
++            )
++            raise
++        finally:
++            conn.close()
+diff --git a/src/integrations/content_hub/service.py b/src/integrations/content_hub/service.py
+new file mode 100644
+index 0000000..b5daa61
+--- /dev/null
++++ b/src/integrations/content_hub/service.py
+@@ -0,0 +1,92 @@
++"""╨б╨╡╤А╨▓╨╕╤Б: ╨╝╨░╨┐╨┐╨╕╨╜╨│ VideoRecord + PublicationResult -> canonical payload ╨╕ ╨╖╨░╨┐╨╕╤Б╤М ╨▓ Content Hub."""
++
++import logging
++from datetime import datetime, timezone
++from pathlib import Path
++from typing import Optional
++
++from src.storage.database import VideoRecord
++from src.models.content import PublicationResult
++
++from .models import ContentHubConfig, LinkMapPayload, PublicationPayload
++from .repository import ContentHubRepository
++
++logger = logging.getLogger(__name__)
++
++
++def _global_uid(record: VideoRecord) -> str:
++    """╨б╤В╨░╨▒╨╕╨╗╤М╨╜╤Л╨╣ source key: vk_importer:video_record:<id> ╨╕╨╗╨╕ fallback vk_importer:path:<path>."""
++    if getattr(record, "id", None) is not None:
++        return f"vk_importer:video_record:{record.id}"
++    path = (record.file_path or "").replace("\\", "/").strip()
++    if path:
++        return f"vk_importer:path:{path}"
++    return f"vk_importer:path:unknown"
++
++
++def _remote_id_from_vk_url(remote_url: Optional[str]) -> Optional[str]:
++    """╨Ш╨╖╨▓╨╗╨╡╤З╤М remote_id ╨┤╨╗╤П VK ╨╕╨╖ URL (╤Д╨╛╤А╨╝╨░╤В owner_id_video_id, ╨╜╨░╨┐╤А╨╕╨╝╨╡╤А -12345_67890)."""
++    if not remote_url:
++        return None
++    from src.publisher.vk_publisher import VKPublisher
++    pair = VKPublisher.parse_video_url(remote_url)
++    if not pair:
++        return None
++    owner_id, video_id = pair
++    return f"{owner_id}_{video_id}"
++
++
++class ContentHubService:
++    """╨С╨╕╨╖╨╜╨╡╤Б-╨╝╤Н╨┐╨┐╨╕╨╜╨│ publish-result -> canonical ╨╕ ╨▓╤Л╨╖╨╛╨▓ repository."""
++
++    def __init__(self, config: Optional[ContentHubConfig] = None, run_id: Optional[str] = None):
++        self.config = config or ContentHubConfig.from_env()
++        self._repo = ContentHubRepository(self.config, run_id=run_id)
++
++    def write_canonical(
++        self,
++        record: VideoRecord,
++        result: PublicationResult,
++    ) -> None:
++        """
++        ╨Я╨╛╤Б╨╗╨╡ ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕ (╤Г╤Б╨┐╨╡╤И╨╜╨╛╨╣ ╨╕╨╗╨╕ ╨╜╨╡╤В): upsert ╨▓ publication ╨╕ link_map.
++        ╨Я╤А╨╕ dry_run ╤В╨╛╨╗╤М╨║╨╛ ╨╗╨╛╨│╨╕╤А╤Г╨╡╤В payload, ╨╜╨╡ ╨┐╨╕╤И╨╡╤В ╨▓ ╨С╨Ф.
++        """
++        if not self.config.enabled:
++            return
++        global_uid = _global_uid(record)
++        destination = result.destination or "vk"
++        status = "published" if result.ok else "failed"
++        error = result.error_code if not result.ok else None
++        remote_url = result.remote_url if result.ok else None
++        remote_id = _remote_id_from_vk_url(remote_url) if remote_url else None
++        published_at = datetime.now(timezone.utc) if result.ok else None
++
++        pub = PublicationPayload(
++            global_uid=global_uid,
++            destination=destination,
++            remote_url=remote_url,
++            remote_id=remote_id,
++            status=status,
++            error=error,
++            published_at=published_at,
++        )
++        link = LinkMapPayload(
++            source_global_uid=global_uid,
++            destination=destination,
++            remote_id=remote_id,
++            remote_url=remote_url,
++        )
++
++        if self.config.dry_run:
++            logger.info(
++                "content_hub [dry-run] would upsert: global_uid=%s destination=%s status=%s remote_id=%s",
++                global_uid, destination, status, remote_id,
++                extra={"run_id": self._repo.run_id, "dry_run": True},
++            )
++            self._repo.upsert_publication(pub)  # ╨▓╨╜╤Г╤В╤А╨╕ ╨┐╤А╨╛╨▓╨╡╤А╨╕╤В dry_run ╨╕ ╤В╨╛╨╗╤М╨║╨╛ ╨╖╨░╨╗╨╛╨│╨╕╤А╤Г╨╡╤В
++            self._repo.upsert_link_map(link)
++            return
++
++        self._repo.upsert_publication(pub)
++        self._repo.upsert_link_map(link)

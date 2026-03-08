@@ -33,6 +33,7 @@ from src.app_context import get_vk_publisher, FatalUploadError
 from src.adapters import VKDestinationAdapter
 from src.config.registry import COURSE_TYPES, CHANNEL_TO_TITLE_GENERATOR
 from src.config.source_registry import get_export_paths
+from src.integrations.content_hub import write_canonical_if_enabled
 
 # Настройка логирования (файл в папке logs, папка в .gitignore)
 # Уровень из переменной окружения LOG_LEVEL (DEBUG, INFO, WARNING, ERROR) для пайплайнов
@@ -794,6 +795,8 @@ def _upload_video(record: VideoRecord, storage: VideoStorage, delay: float, max_
     )
     result = adapter.publish(item)
 
+    write_canonical_if_enabled(record, result)
+
     if result.ok and result.remote_url:
         storage.mark_uploaded(record.id, result.remote_url, post_url=None)
         click.echo(f"✓ Видео {record.id} успешно загружено: {result.remote_url}")
@@ -828,6 +831,8 @@ def _upload_batch(records: list[VideoRecord], storage: VideoStorage, delay: floa
             record_id=record.id,
         )
         result = adapter.publish(item)
+
+        write_canonical_if_enabled(record, result)
 
         if result.ok and result.remote_url:
             storage.mark_uploaded(record.id, result.remote_url, post_url=None)

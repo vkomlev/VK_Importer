@@ -1,0 +1,286 @@
+﻿diff --git a/docs/CONTENT-HUB-RUNBOOK.md b/docs/CONTENT-HUB-RUNBOOK.md
+new file mode 100644
+index 0000000..c12ab69
+--- /dev/null
++++ b/docs/CONTENT-HUB-RUNBOOK.md
+@@ -0,0 +1,91 @@
++# Content Hub canonical write-path (P2B): runbook
++
++╨Ф╨░╤В╨░: 2026-03-07  
++╨в╨Ч: [TECH-SPEC-CURSOR-P2B-VK-IMPORTER-v1.md](TECH-SPEC-CURSOR-P2B-VK-IMPORTER-v1.md)
++
++╨Ч╨░╨┐╨╕╤Б╤М ╨▓ `content_hub.publication` ╨╕ `content_hub.link_map` ╨▓╤Л╨┐╨╛╨╗╨╜╤П╨╡╤В╤Б╤П **╤В╨╛╨╗╤М╨║╨╛ ╤З╨╡╤А╨╡╨╖** `content_hub_client` (╨╕╨╜╤Д╤А╨░-╤Б╨╗╨╛╨╣ ContentBackbone). ╨Т VK_Importer ╨╜╨╡╤В ╨┐╤А╤П╨╝╨╛╨│╨╛ SQL ╨╕ ╨╗╨╛╨║╨░╨╗╤М╨╜╨╛╨│╨╛ DAO ╨┤╨╗╤П canonical write.
++
++---
++
++## 1. ╨Ч╨░╨▓╨╕╤Б╨╕╨╝╨╛╤Б╤В╤М content_hub_client
++
++╨Ш╤Б╤В╨╛╤З╨╜╨╕╨║: `D:\Work\ContentBackbone\content_hub_client\`.
++
++**╨б╨┐╨╛╤Б╨╛╨▒ ╨┐╨╛╨┤╨║╨╗╤О╤З╨╡╨╜╨╕╤П:** ╨┤╨╛╨▒╨░╨▓╨╕╤В╤М ╨║╨╛╤А╨╡╨╜╤М ContentBackbone ╨▓ `PYTHONPATH`, ╤З╤В╨╛╨▒╤Л ╨╕╨╝╨┐╨╛╤А╤В `content_hub_client` ╨╜╨░╤Е╨╛╨┤╨╕╨╗ ╨╝╨╛╨┤╤Г╨╗╨╕.
++
++╨Я╤А╨╕╨╝╨╡╤А (PowerShell, ╤Б╨╡╤Б╤Б╨╕╤П):
++```powershell
++$env:PYTHONPATH = "D:\Work\ContentBackbone;$env:PYTHONPATH"
++python main.py upload-one 123
++```
++
++╨Ш╨╗╨╕ ╨▓ ╨╛╨┤╨╜╨╛╨╣ ╨║╨╛╨╝╨░╨╜╨┤╨╡:
++```powershell
++$env:CONTENT_HUB_WRITE_ENABLED="1"; $env:PYTHONPATH="D:\Work\ContentBackbone"; python main.py upload-one 123
++```
++
++╨С╨╡╨╖ `content_hub_client` ╨▓ PYTHONPATH ╨┐╤А╨╕ `CONTENT_HUB_WRITE_ENABLED=1` ╨▓ ╨╗╨╛╨│ ╨┐╨╕╤И╨╡╤В╤Б╤П ╨┐╤А╨╡╨┤╤Г╨┐╤А╨╡╨╢╨┤╨╡╨╜╨╕╨╡ ╨╕ ╨╖╨░╨┐╨╕╤Б╤М ╨╜╨╡ ╨▓╤Л╨┐╨╛╨╗╨╜╤П╨╡╤В╤Б╤П.
++
++---
++
++## 2. ╨Я╨╡╤А╨╡╨╝╨╡╨╜╨╜╤Л╨╡ ╨╛╨║╤А╤Г╨╢╨╡╨╜╨╕╤П
++
++| ╨Я╨╡╤А╨╡╨╝╨╡╨╜╨╜╨░╤П | ╨Я╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О | ╨Ю╨┐╨╕╤Б╨░╨╜╨╕╨╡ |
++|------------|--------------|----------|
++| `CONTENT_HUB_WRITE_ENABLED` | `0` | `1` тАФ ╨▓╨║╨╗╤О╤З╨╕╤В╤М canonical write ╨┐╨╛╤Б╨╗╨╡ ╨║╨░╨╢╨┤╨╛╨╣ ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕ (╤З╨╡╤А╨╡╨╖ content_hub_client). |
++| `CONTENT_HUB_WRITE_DRY_RUN` | `0` | `1` тАФ dry-run: ╨║╨╗╨╕╨╡╨╜╤В ╨╜╨╡ ╨║╨╛╨╝╨╝╨╕╤В╨╕╤В ╨▓ ╨С╨Ф. |
++| `CONTENT_HUB_WRITE_STRICT` | `0` | `1` тАФ ╤Б╨▒╨╛╨╣ canonical write ╤Б╤З╨╕╤В╨░╤В╤М ╤Д╨░╤В╨░╨╗╤М╨╜╨╛╨╣ ╨╛╤И╨╕╨▒╨║╨╛╨╣ ╤И╨░╨│╨░. |
++| `CONTENT_HUB_PG_DSN` | тАФ | DSN PostgreSQL, ╨╜╨░╨┐╤А╨╕╨╝╨╡╤А `postgresql://user:pass@host:5432/Learn`. |
++| `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | тАФ | ╨Р╨╗╤М╤В╨╡╤А╨╜╨░╤В╨╕╨▓╨░ DSN (╤Б╨╛╨▒╨╕╤А╨░╨╡╤В╤Б╤П DSN, ╨╡╤Б╨╗╨╕ `CONTENT_HUB_PG_DSN` ╨╜╨╡ ╨╖╨░╨┤╨░╨╜; `PGDATABASE` ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О `Learn`). |
++
++---
++
++## 3. ╨Т╨║╨╗╤О╤З╨╡╨╜╨╕╨╡ write-path
++
++1. ╨г╨▒╨╡╨┤╨╕╤В╤М╤Б╤П, ╤З╤В╨╛ ╨▓ ╨╛╨║╤А╤Г╨╢╨╡╨╜╨╕╨╕ ╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ `content_hub_client` (PYTHONPATH = ╨║╨╛╤А╨╡╨╜╤М ContentBackbone).
++2. ╨Ч╨░╨┤╨░╤В╤М `CONTENT_HUB_WRITE_ENABLED=1` ╨╕ `CONTENT_HUB_PG_DSN=...` (╨╕╨╗╨╕ ╤Б╨╛╤Б╤В╨░╨▓╨╜╤Л╨╡ PG-╨┐╨╡╤А╨╡╨╝╨╡╨╜╨╜╤Л╨╡).
++3. ╨Ч╨░╨┐╤Г╤Б╨║╨░╤В╤М ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╤О ╨║╨░╨║ ╨╛╨▒╤Л╤З╨╜╨╛: `upload-one`, ╨┐╨░╨╣╨┐╨╗╨░╨╣╨╜ ╨╕ ╤В.╨┤. ╨Я╨╛╤Б╨╗╨╡ ╨║╨░╨╢╨┤╨╛╨│╨╛ publish ╨▓╤Л╨╖╤Л╨▓╨░╨╡╤В╤Б╤П ╨║╨╗╨╕╨╡╨╜╤В (upsert publication + link_map).
++
++---
++
++## 4. Dry-run
++
++`CONTENT_HUB_WRITE_DRY_RUN=1` тАФ ╨║╨╗╨╕╨╡╨╜╤В ╨╜╨╡ ╨▓╤Л╨┐╨╛╨╗╨╜╤П╨╡╤В commit; ╨▓ ╨╗╨╛╨│╨░╤Е ╤Д╨╕╨║╤Б╨╕╤А╤Г╨╡╤В╤Б╤П ╨╛╨┐╨╡╤А╨░╤Ж╨╕╤П (dry_run). ╨Ф╨░╨╜╨╜╤Л╨╡ ╨▓ ╨С╨Ф ╨╜╨╡ ╨╝╨╡╨╜╤П╤О╤В╤Б╤П.
++
++---
++
++## 5. ╨Ю╤В╨║╨░╤В
++
++1. `CONTENT_HUB_WRITE_ENABLED=0` (╨╕╨╗╨╕ ╤Г╨┤╨░╨╗╨╕╤В╤М ╨┐╨╡╤А╨╡╨╝╨╡╨╜╨╜╤Г╤О).
++2. ╨Я╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╤П ╨▓ VK ╨╕ `videos.db` ╤А╨░╨▒╨╛╤В╨░╤О╤В ╨║╨░╨║ ╤А╨░╨╜╤М╤И╨╡; canonical write ╨╜╨╡ ╨▓╤Л╨╖╤Л╨▓╨░╨╡╤В╤Б╤П.
++
++╨Я╤А╨╕ ╨┐╨╛╨╗╨╜╨╛╨╝ ╨╛╤В╨║╨░╤В╨╡ ╨║╨╛╨┤╨░: `git revert <commit>`, ╨╖╨░╤В╨╡╨╝ smoke-╨┐╤А╨╛╨▓╨╡╤А╨║╨░ publish-flow.
++
++---
++
++## 6. ╨Ь╨░╨┐╨┐╨╕╨╜╨│ (PublicationResult тЖТ client payload)
++
++- **global_uid / source_global_uid:** `vk_importer:video_record:<id>` ╨╕╨╗╨╕ `vk_importer:path:<normalized_file_path>`.
++- **destination:** `vk`.
++- **remote_url, remote_id:** ╨╕╨╖ `result.remote_url`; remote_id тАФ ╨┐╨░╤А╤Б╨╕╨╜╨│ VK URL (`owner_id_video_id`).
++- **status:** `published` | `failed`; **error:** `result.error_code` ╨┐╤А╨╕ ╨╛╤И╨╕╨▒╨║╨╡.
++- **published_at:** UTC ISO-8601 ╨┐╤А╨╕ ╤Г╤Б╨┐╨╡╤Е╨╡.
++
++---
++
++## 7. ╨Т╨░╨╗╨╕╨┤╨░╤Ж╨╕╤П
++
++```powershell
++python -m py_compile main.py src/adapters/destinations/vk.py src/models/content.py
++python main.py vk-preflight
++# ╨б ╤А╨╡╨░╨╗╤М╨╜╤Л╨╝ ID ╨╕ ╨┤╨╛╤Б╤В╤Г╨┐╨╛╨╝ ╨║ ╨С╨Ф Learn:
++$env:CONTENT_HUB_WRITE_ENABLED="1"; $env:PYTHONPATH="D:\Work\ContentBackbone"; python main.py upload-one <REAL_ID>
++# ╨Я╨╛╨▓╤В╨╛╤А (╨╕╨┤╨╡╨╝╨┐╨╛╤В╨╡╨╜╤В╨╜╨╛╤Б╤В╤М)
++$env:CONTENT_HUB_WRITE_ENABLED="1"; $env:PYTHONPATH="D:\Work\ContentBackbone"; python main.py upload-one <REAL_ID>
++# Dry-run
++$env:CONTENT_HUB_WRITE_ENABLED="1"; $env:CONTENT_HUB_WRITE_DRY_RUN="1"; $env:PYTHONPATH="D:\Work\ContentBackbone"; python main.py upload-one <REAL_ID>
++# ╨Р╤Г╨┤╨╕╤В: ╨╜╨╡ ╨┤╨╛╨╗╨╢╨╜╨╛ ╨▒╤Л╤В╤М ╨┐╤А╤П╨╝╨╛╨│╨╛ canonical write ╨▓ src
++rg -n "INSERT INTO content_hub|UPDATE content_hub|DELETE FROM content_hub|psycopg2.connect\(" src
++```
++
++╨Ю╨╢╨╕╨┤╨░╨╡╨╝╨╛: ╨▓ `src` ╨╜╨╡╤В ╨▓╤Е╨╛╨╢╨┤╨╡╨╜╨╕╨╣ ╨┐╤А╤П╨╝╨╛╨│╨╛ SQL ╨▓ content_hub ╨╕ psycopg2.connect.
+diff --git a/main.py b/main.py
+index 3097ffc..457b350 100644
+--- a/main.py
++++ b/main.py
+@@ -33,6 +33,7 @@ from src.app_context import get_vk_publisher, FatalUploadError
+ from src.adapters import VKDestinationAdapter
+ from src.config.registry import COURSE_TYPES, CHANNEL_TO_TITLE_GENERATOR
+ from src.config.source_registry import get_export_paths
++from src.integrations.content_hub import write_canonical_if_enabled
+ 
+ # ╨Э╨░╤Б╤В╤А╨╛╨╣╨║╨░ ╨╗╨╛╨│╨╕╤А╨╛╨▓╨░╨╜╨╕╤П (╤Д╨░╨╣╨╗ ╨▓ ╨┐╨░╨┐╨║╨╡ logs, ╨┐╨░╨┐╨║╨░ ╨▓ .gitignore)
+ # ╨г╤А╨╛╨▓╨╡╨╜╤М ╨╕╨╖ ╨┐╨╡╤А╨╡╨╝╨╡╨╜╨╜╨╛╨╣ ╨╛╨║╤А╤Г╨╢╨╡╨╜╨╕╤П LOG_LEVEL (DEBUG, INFO, WARNING, ERROR) ╨┤╨╗╤П ╨┐╨░╨╣╨┐╨╗╨░╨╣╨╜╨╛╨▓
+@@ -794,6 +795,8 @@ def _upload_video(record: VideoRecord, storage: VideoStorage, delay: float, max_
+     )
+     result = adapter.publish(item)
+ 
++    write_canonical_if_enabled(record, result)
++
+     if result.ok and result.remote_url:
+         storage.mark_uploaded(record.id, result.remote_url, post_url=None)
+         click.echo(f"тЬУ ╨Т╨╕╨┤╨╡╨╛ {record.id} ╤Г╤Б╨┐╨╡╤И╨╜╨╛ ╨╖╨░╨│╤А╤Г╨╢╨╡╨╜╨╛: {result.remote_url}")
+@@ -829,6 +832,8 @@ def _upload_batch(records: list[VideoRecord], storage: VideoStorage, delay: floa
+         )
+         result = adapter.publish(item)
+ 
++        write_canonical_if_enabled(record, result)
++
+         if result.ok and result.remote_url:
+             storage.mark_uploaded(record.id, result.remote_url, post_url=None)
+             successful += 1
+diff --git a/src/integrations/content_hub/__init__.py b/src/integrations/content_hub/__init__.py
+new file mode 100644
+index 0000000..eeacac3
+--- /dev/null
++++ b/src/integrations/content_hub/__init__.py
+@@ -0,0 +1,5 @@
++# Canonical write-path ╤З╨╡╤А╨╡╨╖ content_hub_client (P2B). ╨Ы╨╛╨║╨░╨╗╤М╨╜╨╛╨│╨╛ SQL/DAO ╨╜╨╡╤В.
++
++from .adapter import write_canonical_if_enabled
++
++__all__ = ["write_canonical_if_enabled"]
+diff --git a/src/integrations/content_hub/adapter.py b/src/integrations/content_hub/adapter.py
+new file mode 100644
+index 0000000..d1d4d5d
+--- /dev/null
++++ b/src/integrations/content_hub/adapter.py
+@@ -0,0 +1,142 @@
++"""╨Ф╨╛╨╝╨╡╨╜╨╜╤Л╨╣ ╨░╨┤╨░╨┐╤В╨╡╤А: ╨╝╨░╨┐╨┐╨╕╨╜╨│ PublicationResult + VideoRecord -> payload content_hub_client ╨╕ ╨▓╤Л╨╖╨╛╨▓ ╨║╨╗╨╕╨╡╨╜╤В╨░.
++
++╨Т╨╡╤Б╤М canonical write ╨▓╤Л╨┐╨╛╨╗╨╜╤П╨╡╤В╤Б╤П ╤В╨╛╨╗╤М╨║╨╛ ╤З╨╡╤А╨╡╨╖ content_hub_client (ContentBackbone).
++╨Я╤А╤П╨╝╨╛╨│╨╛ SQL ╨╕ ╨╗╨╛╨║╨░╨╗╤М╨╜╨╛╨│╨╛ DAO ╨▓ VK_Importer ╨╜╨╡╤В.
++"""
++
++import logging
++import os
++import uuid
++from datetime import datetime, timezone
++from pathlib import Path
++from typing import Optional
++
++from src.storage.database import VideoRecord
++from src.models.content import PublicationResult
++from src.utils.env_utils import get_env_var
++
++logger = logging.getLogger(__name__)
++
++# ╨Ш╨╝╨┐╨╛╤А╤В ╨║╨╗╨╕╨╡╨╜╤В╨░ тАФ ╨╛╨┐╤Ж╨╕╨╛╨╜╨░╨╗╨╡╨╜; ╨┐╤А╨╕ ╨╛╤В╤Б╤Г╤В╤Б╤В╨▓╨╕╨╕ ╨╝╨╛╨┤╤Г╨╗╤П canonical write ╨╛╤В╨║╨╗╤О╤З╨░╨╡╤В╤Б╤П
++try:
++    from content_hub_client.client import ContentHubClient
++    from content_hub_client.contracts import LinkMapPayload, PublicationPayload
++    _CLIENT_AVAILABLE = True
++except ImportError:
++    ContentHubClient = None  # type: ignore
++    LinkMapPayload = None  # type: ignore
++    PublicationPayload = None  # type: ignore
++    _CLIENT_AVAILABLE = False
++
++
++def _config_from_env(env_path: Optional[Path] = None) -> tuple[bool, bool, bool, Optional[str]]:
++    """(enabled, dry_run, strict, dsn)."""
++    enabled = (get_env_var("CONTENT_HUB_WRITE_ENABLED", "0", env_path) or "0").strip() == "1"
++    dry_run = (get_env_var("CONTENT_HUB_WRITE_DRY_RUN", "0", env_path) or "0").strip() == "1"
++    strict = (get_env_var("CONTENT_HUB_WRITE_STRICT", "0", env_path) or "0").strip() == "1"
++    dsn = get_env_var("CONTENT_HUB_PG_DSN", env_path=env_path)
++    if not dsn and (get_env_var("PGHOST", env_path=env_path) or os.getenv("PGHOST")):
++        host = get_env_var("PGHOST", env_path=env_path) or os.getenv("PGHOST", "")
++        port = get_env_var("PGPORT", env_path=env_path) or os.getenv("PGPORT", "5432")
++        dbname = get_env_var("PGDATABASE", env_path=env_path) or os.getenv("PGDATABASE", "Learn")
++        user = get_env_var("PGUSER", env_path=env_path) or os.getenv("PGUSER", "")
++        password = get_env_var("PGPASSWORD", env_path=env_path) or os.getenv("PGPASSWORD", "")
++        if user and password:
++            dsn = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
++        else:
++            dsn = f"postgresql://{host}:{port}/{dbname}" if host else None
++    return enabled, dry_run, strict, dsn
++
++
++def _global_uid(record: VideoRecord) -> str:
++    """╨б╤В╨░╨▒╨╕╨╗╤М╨╜╤Л╨╣ source key: vk_importer:video_record:<id> ╨╕╨╗╨╕ vk_importer:path:<path>."""
++    if getattr(record, "id", None) is not None:
++        return f"vk_importer:video_record:{record.id}"
++    path = (record.file_path or "").replace("\\", "/").strip()
++    if path:
++        return f"vk_importer:path:{path}"
++    return "vk_importer:path:unknown"
++
++
++def _remote_id_from_vk_url(remote_url: Optional[str]) -> Optional[str]:
++    """╨д╨╛╤А╨╝╨░╤В owner_id_video_id (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А -12345_67890)."""
++    if not remote_url:
++        return None
++    from src.publisher.vk_publisher import VKPublisher
++    pair = VKPublisher.parse_video_url(remote_url)
++    if not pair:
++        return None
++    oid, vid = pair
++    return f"{oid}_{vid}"
++
++
++def write_canonical_if_enabled(record: VideoRecord, result: PublicationResult) -> None:
++    """Post-publish: ╨┐╤А╨╕ CONTENT_HUB_WRITE_ENABLED=1 ╨▓╤Л╨╖╨▓╨░╤В╤М content_hub_client (upsert publication + link_map).
++
++    ╨Я╤А╨╕ ╤Б╨▒╨╛╨╡: ╨╗╨╛╨│ ╨╕ ╨┐╤А╨╕ CONTENT_HUB_WRITE_STRICT=1 тАФ ╨┐╤А╨╛╨▒╤А╨╛╤Б ╨╕╤Б╨║╨╗╤О╤З╨╡╨╜╨╕╤П.
++    ╨Х╤Б╨╗╨╕ ╨╝╨╛╨┤╤Г╨╗╤М content_hub_client ╨╜╨╡╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ тАФ warning ╨╕ ╨▓╤Л╤Е╨╛╨┤ ╨▒╨╡╨╖ ╨╖╨░╨┐╨╕╤Б╨╕.
++    """
++    enabled, dry_run, strict, dsn = _config_from_env()
++    if not enabled:
++        return
++
++    if not _CLIENT_AVAILABLE:
++        logger.warning(
++            "content_hub_client ╨╜╨╡╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ (PYTHONPATH?): canonical write ╨┐╤А╨╛╨┐╤Г╤Й╨╡╨╜. "
++            "╨Ф╨╛╨▒╨░╨▓╤М╤В╨╡ ╨║╨╛╤А╨╡╨╜╤М ContentBackbone ╨▓ PYTHONPATH."
++        )
++        if strict:
++            raise RuntimeError("content_hub_client ╨╜╨╡╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ ╨┐╤А╨╕ CONTENT_HUB_WRITE_STRICT=1")
++        return
++
++    if not dsn:
++        logger.warning("CONTENT_HUB_PG_DSN ╨╜╨╡ ╨╖╨░╨┤╨░╨╜: canonical write ╨┐╤А╨╛╨┐╤Г╤Й╨╡╨╜.")
++        if strict:
++            raise ValueError("CONTENT_HUB_PG_DSN ╨╜╨╡ ╨╖╨░╨┤╨░╨╜ ╨┐╤А╨╕ CONTENT_HUB_WRITE_STRICT=1")
++        return
++
++    global_uid = _global_uid(record)
++    destination = result.destination or "vk"
++    status = "published" if result.ok else "failed"
++    error = result.error_code if not result.ok else None
++    remote_url = result.remote_url if result.ok else None
++    remote_id = _remote_id_from_vk_url(remote_url) if remote_url else None
++    published_at: Optional[str] = None
++    if result.ok:
++        published_at = datetime.now(timezone.utc).isoformat()
++
++    pub = PublicationPayload(
++        global_uid=global_uid,
++        destination=destination,
++        remote_id=remote_id,
++        remote_url=remote_url,
++        published_at=published_at,
++        status=status,
++        error=error,
++    )
++    link = LinkMapPayload(
++        source_global_uid=global_uid,
++        destination=destination,
++        remote_id=remote_id,
++        remote_url=remote_url,
++    )
++
++    run_id = str(uuid.uuid4())[:8]
++    client = ContentHubClient(dsn, dry_run=dry_run, logger=logger, run_id=run_id)
++
++    try:
++        r1 = client.upsert_publication(pub)
++        if not r1.ok and strict:
++            raise RuntimeError(f"content_hub_client upsert_publication failed: {r1.error_message}")
++        if not r1.ok:
++            logger.warning("content_hub_client upsert_publication failed: %s", r1.error_message)
++
++        r2 = client.upsert_link_map(link)
++        if not r2.ok and strict:
++            raise RuntimeError(f"content_hub_client upsert_link_map failed: {r2.error_message}")
++        if not r2.ok:
++            logger.warning("content_hub_client upsert_link_map failed: %s", r2.error_message)
++    except Exception as e:
++        logger.warning("Content Hub canonical write failed (upload ╨╜╨╡ ╨╛╤В╨╝╨╡╨╜╤С╨╜): %s", e, exc_info=True)
++        if strict:
++            raise

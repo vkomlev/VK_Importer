@@ -1,0 +1,5 @@
+# Локальная зависимость: content_hub_client из репозитория ContentBackbone.
+# Установка: pip install -r requirements.local.txt
+# Путь машино-зависимый; при другом расположении ContentBackbone измените путь ниже.
+
+-e D:\Work\ContentBackbone

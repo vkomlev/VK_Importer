@@ -1,49 +1,68 @@
 ---
 name: tech-spec-composer
-description: Produce a developer-ready technical assignment for Tier L executors with explicit context, constraints, stack rules, required skills, plugins/tools, acceptance criteria, and handoff artifacts. Use when preparing implementation tasks for Cursor agents, Codex executors, API work, bot work, parsers, and publishers.
+description: "Сформировать техническое задание, готовое к исполнению Tier L: с явным контекстом, ограничениями, правилами стека, обязательными скиллами/инструментами, критериями приемки и артефактами передачи/ревью. Использовать при постановке задач для Cursor-агентов и Codex-исполнителей (API, боты, парсеры, публикация)."
 ---
 
 # Tech Spec Composer
 
-## Workflow
-1. Restate business goal and user-visible outcome in one sentence.
-2. Capture implementation context: repo, modules, related services, current behavior.
-3. Define strict scope: in-scope, out-of-scope, and no-touch zones.
-4. Specify stack and framework constraints for the target project type.
-5. Declare mandatory tools/skills/rules that Tier L must use.
-6. Write a deterministic implementation sequence with file-level hints.
-7. Add explicit navigation and state-transition contract for user-facing flows.
-8. For queue/next flows, define explicit `Forbidden Controls` for happy path and justify any exceptions.
-9. Define acceptance criteria, validation commands, and review artifacts.
-10. Add rollback notes and risk controls for main/master direct commits.
+## Назначение
+Скилл готовит короткое, однозначное ТЗ, которое можно исполнять без догадок: что менять, где менять, как проверять и какие доказательства приложить к ревью.
 
-## Domain Mode Selection
-Read [references/domain-modes.md](references/domain-modes.md) and choose one mode:
-- `telegram-bot`
-- `api-service`
-- `parser-pipeline`
-- `publisher-integration`
+## Принцип работы
+Применять компактные guardrails из [references/claude-imported-guards.md](references/claude-imported-guards.md) и [references/root-task-tracker.md](references/root-task-tracker.md): не додумывать стратегические развилки, маркировать исполнителей, фиксировать preflight/smoke/concurrency/stage/API/SQL guards только когда они релевантны, а Root-задачу создавать самостоятельно при срабатывании tracker-триггера.
 
-Use only the selected mode checklist in the final assignment.
+## Порядок работы
+1. Сформулировать цель и пользовательский результат в одном абзаце.
+2. Зафиксировать контекст: репозиторий, затронутые модули, текущее поведение, внешние зависимости.
+3. Проверить Root tracker trigger из [references/root-task-tracker.md](references/root-task-tracker.md): если задача должна жить в портфельном трекере, создать или переиспользовать `tsk-NNN` до выдачи ТЗ и ссылаться на него в контексте.
+4. Жёстко задать границы:
+- что входит;
+- что не входит;
+- какие зоны не трогать.
+5. Для migration/operator/CLI-задач сначала собрать `карту предметных зависимостей`:
+- какие данные, классификаторы, состояния и правила нужны для реальной работы;
+- что уже есть в target system, а что ещё нужно перенести.
+6. Выбрать один доменный режим из [references/domain-modes.md](references/domain-modes.md) и использовать только его checklist.
+7. Если доступны `product-review`, `eng-review`, `Product Review Snapshot` или `Engineering Review Snapshot`, явно потребить их и перенести обязательные ограничения в ТЗ.
+8. Составить детерминированные шаги реализации с привязкой к файлам/модулям и inline-маркерами `Executor` / `Review`.
+9. Если есть пользовательский поток, явно описать:
+- `Контракт навигации`;
+- `Запрещённые элементы управления` на happy-path.
+10. Зафиксировать приёмку:
+- критерии;
+- команды проверки;
+- минимальные артефакты review-gate;
+- rollback и меры снижения риска.
+11. Проверить, не допускает ли ТЗ дублирование общей инфраструктуры без явного архитектурного исключения.
 
-## Output Contract
-- `Objective`
-- `Context`
-- `Scope`
-- `Stack and Constraints`
-- `Required Skills/Rules`
-- `Implementation Steps`
-- `Navigation Contract` (explicit back/next targets by screen/state)
-- `Forbidden Controls` (controls that must NOT be visible in happy path; include exception rationale if any)
-- `Acceptance Criteria`
-- `Validation Commands`
-- `Handoff Artifacts`
-- `Risks and Rollback`
+## Формат результата
+- `Цель`
+- `Контекст`
+- `Границы задачи`
+- `Стек и ограничения`
+- `Consumed Review Artifacts`
+- `Обязательные скиллы/правила`
+- `Шаги реализации` — с `Executor` на каждой существенной под-задаче и `Review` там, где есть security/contracts/migrations/concurrency/data-write риск
+- `Контракт навигации`
+- `Запрещённые элементы управления`
+- `Preflight / Deployment Checklist` (если применимо)
+- `Concurrency & Idempotency` (если применимо)
+- `Stage Dependency Graph` (если применимо)
+- `Frontend Routes` и `API Endpoints` отдельными таблицами (если применимо)
+- `Критерии приёмки`
+- `Команды проверки`
+- `Артефакты review-gate`
+- `Переиспользование общей инфраструктуры`
+- `Артефакты передачи`
+- `Риски и откат`
 
-## Quality Rules
-- Write requirements so a Tier L agent can execute without guessing.
-- Prefer measurable criteria over qualitative wording.
-- Bind each validation command to a concrete expected result.
-- Keep steps atomic; one action per step.
-- Ban ambiguous navigation phrasing ("back to menu/list/etc.") without exact target screen/state id.
-- In next/queue mode tasks, include at least one acceptance criterion asserting forbidden controls are hidden.
+## Правила качества
+- Основной язык: русский.
+- Требования должны быть исполнимыми без догадок и без расплывчатых формулировок.
+- Если сработал Root tracker trigger, ТЗ ссылается на созданную/найденную `tsk-NNN`, а не перекладывает создание задачи на оператора.
+- Не подменять предметную функциональность списком команд/экранов, если не закрыты доменные предпосылки.
+- Один основной документ по умолчанию; дополнительные матрицы и заметки допустимы только при реальной необходимости.
+- Для next/queue-потоков отсутствие forbidden controls должно быть проверяемым критерием приёмки.
+- Каждая существенная под-задача должна иметь конкретного исполнителя, а рискованные пути — конкретный review skill.
+- Для внешних write-path mock-only acceptance недостаточен; нужен gated live smoke criterion или явное обоснование невозможности.
+- Для SQL с window/gap/recursive логикой требуется 3-row mental trace в ТЗ.

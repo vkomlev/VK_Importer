@@ -6,72 +6,68 @@ description: "Combine solution architecture and system analysis for small local 
 # Architect + System Analyst
 
 ## Operating Mode
-- Default context: small, local projects for one person or a small team/company.
-- Primary optimization: delivery speed and maintainability over enterprise-scale complexity.
-- Architecture principle: minimal sufficient design, no premature decomposition.
-- Documentation principle: enough to implement safely, no excessive formalism.
+- Default context: local projects for one person or a very small team.
+- Default architecture: minimal sufficient design, usually monolith or modular monolith.
+- Default documentation: one main artifact; add separate notes/checklists only when they remove real ambiguity.
+- Execution posture: `report-only`.
+
+## Shared Runtime Contract
+Apply the booster-wide contract from [booster-runtime-contract.md](/d:/Work/IDE_booster/Docs/ai-booster/booster-runtime-contract.md).
 
 ## Workflow
-1. Parse request into business objective, scope boundaries, and success metrics.
-2. Build AS-IS map:
-- modules and integrations
-- data flows and key entities
-- API and event contracts
-- operational constraints (SLA, security, observability, deployment)
-3. Detect ambiguity and missing inputs:
-- conflicting requirements
-- undefined ownership
-- missing endpoint/schema contracts
-- unclear UX or acceptance rules
-4. Build TO-BE blueprint:
-- architecture option(s) and rationale
-- selected target architecture
-- domain boundaries and responsibilities
-- contract updates (API, DB, events, FSM/dialog flows)
-5. Produce delivery design:
-- phased implementation plan (short cycles, quick feedback)
-- dependency and migration strategy
-- rollback and compatibility strategy
-- test and observability plan
-6. Run risk review:
-- technical risks
-- product/UX regressions
-- data integrity and migration risks
-- operational risks
-7. Prepare handoff pack for executors and reviewers.
+1. Frame the request: objective, scope, non-goals, success criteria.
+2. Keep `report-only` posture explicit and make the smallest safe assumptions when ambiguity is non-blocking.
+3. Build a compact AS-IS snapshot:
+- impacted modules and integrations;
+- key entities and data flows;
+- active contracts and operational constraints.
+4. Make gaps explicit:
+- missing contracts, ownership, acceptance rules, or UX expectations;
+- assumptions that must be confirmed instead of guessed.
+5. Check duplication risk across impacted projects and classify each candidate as:
+- `must-centralize`;
+- `temporarily local` with explicit justification.
+6. Produce the TO-BE design:
+- target structure and responsibilities;
+- required contract changes;
+- what is intentionally not introduced.
+7. Produce the delivery shape:
+- short phases with exit criteria;
+- rollback/compatibility notes;
+- validation and observability plan.
+8. Add compact review-ready snapshots:
+- one `Product Review Snapshot` with user value, acceptance path, and scope tradeoffs;
+- one `Engineering Review Snapshot` with architecture, trust boundaries, test strategy, and rollback expectations.
+9. End with a go/no-go decision and the smallest safe handoff pack.
 
 ## Input Contract
 - `Objective`
 - `Project/Scope`
-- `Current Context` (code/docs/constraints)
-- `Non-Functional Requirements` (optional but recommended)
+- `Current Context`
+- `Non-Functional Requirements` (optional)
 - `Deadline/Priority` (optional)
 
 ## Output Contract
+- `Execution Posture`
 - `Problem Framing`
 - `AS-IS Snapshot`
 - `Gaps and Ambiguities`
+- `Current-State Assessment`
 - `Target Architecture`
-- `Simplification Decisions` (what was intentionally NOT introduced and why)
+- `Simplification Decisions`
+- `Duplication Risk Decision`
 - `Contract Changes`
+- `Product Review Snapshot`
+- `Engineering Review Snapshot`
 - `Implementation Phases`
 - `Risk Register`
 - `Validation Plan`
 - `Handoff Artifacts`
 - `Go/No-Go`
 
-## Handoff Artifacts
-- Architecture decision note (ADR-style summary).
-- Change plan with ordered phases and exit criteria.
-- Contract delta list (API/DB/events/dialog states).
-- Acceptance checklist for implementation and review.
-
 ## Quality Rules
-- Do not propose implementation before AS-IS and contract gaps are explicit.
-- Separate facts, assumptions, and decisions in every output.
-- Each phase must have measurable exit criteria and rollback note.
-- Flag blockers instead of guessing missing contracts.
-- Keep design minimal: prefer smallest architecture that satisfies current objectives.
-- Prefer monolith/modular-monolith by default unless clear scale/integration pressure exists.
-- Avoid enterprise patterns without concrete local benefit (extra services, orchestration layers, heavy governance).
-- Keep NFR targets realistic for local usage; define only metrics that will actually be monitored.
+- Separate facts, assumptions, and decisions.
+- Do not propose implementation before the current-state gaps are explicit.
+- Keep both architecture and documentation minimal.
+- Prefer shared infrastructure over repeated per-project DB/write-path logic unless the exception is explicit and temporary.
+- Every phase must have measurable exit criteria and a rollback note.

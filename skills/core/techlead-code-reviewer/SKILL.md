@@ -5,24 +5,34 @@ description: "Perform a strict technical lead code review for production readine
 
 # TechLead Code Reviewer
 
+## Shared Runtime Contract
+Apply the booster-wide contract from [booster-runtime-contract.md](/d:/Work/IDE_booster/Docs/ai-booster/booster-runtime-contract.md).
+
+## Operating Modes
+- Review mode:
+  - `standard` by default.
+  - `paranoid` for release candidates, risky refactors, schema or data changes, auth/security-sensitive work, or when the user explicitly asks for maximum skepticism.
+- Execution posture:
+  - always `report-only`;
+  - never silently switch into fix mode inside the same response.
+
 ## Review Scope
 Review for:
-- correctness and regressions
-- architecture and layering
-- SOLID and DRY adherence
-- clean code and maintainability
-- logging/observability quality
-- migration safety and rollback
-- test coverage adequacy
-- security and operational risk
-- critical UX/UI option correctness and navigation integrity
-- specification ambiguity and interpretation risks
-- date/time type safety in service logic and raw SQL result handling
+- correctness and regressions;
+- architecture and layering;
+- tests, observability, security, and rollback;
+- public API contract sync, hardcoded URLs, IDOR, and external write-path evidence;
+- critical UX/navigation correctness;
+- spec clarity and date/time safety;
+- phase integrity, domain completeness, and operator-critical acceptance paths;
+- docs/config/runtime drift that can make the repository or operator path misleading.
 
 ## Workflow
-1. Read changed files and identify affected runtime paths.
-2. Apply baseline checklist from [references/review-checklist.md](references/review-checklist.md).
-3. Apply domain checklists as relevant:
+1. Declare the review mode (`standard` or `paranoid`) and keep `report-only` posture explicit.
+2. Read the changed files and identify affected runtime paths, docs, config, and operator touchpoints.
+3. Read the project error register when present and check whether current changes repeat a known prevention action.
+4. Apply the baseline checklist from [references/review-checklist.md](references/review-checklist.md).
+5. Apply domain checklists only where relevant:
 - [references/architecture-checks.md](references/architecture-checks.md)
 - [references/migration-checks.md](references/migration-checks.md)
 - [references/testing-checks.md](references/testing-checks.md)
@@ -31,52 +41,68 @@ Review for:
 - [references/ux-critical-checks.md](references/ux-critical-checks.md)
 - [references/spec-ambiguity-checks.md](references/spec-ambiguity-checks.md)
 - [references/datetime-type-safety-checks.md](references/datetime-type-safety-checks.md)
-4. For next/queue flows, verify rendered control set against spec: required controls visible, forbidden controls hidden.
-5. Classify findings by severity and impact.
-6. If findings indicate Cursor-agent mistakes, create error-log entries using [references/cursor-agent-error-loop.md](references/cursor-agent-error-loop.md).
-7. Produce PASS/FAIL with required fixes and validation commands.
-8. Add residual risk and post-merge watchpoints if PASS.
+6. In `paranoid` mode, assume hidden breakage is more likely than the diff suggests and actively search for missing guards, stale contracts, unsafe defaults, and rollback gaps.
+7. Classify the review horizon explicitly:
+- `microstep implemented`
+- `current repository integration-safe`
+- `phase complete`
+8. Classify findings by severity and impact.
+9. If findings indicate Cursor-agent mistakes, log them via [references/cursor-agent-error-loop.md](references/cursor-agent-error-loop.md).
+10. Produce `PASS` or `FAIL`, required fixes, and reproducible validation commands.
+11. If the same phase is repeatedly `FAIL`, end with either explicit escalation or a tight next-iteration checklist.
+
+For migration/cutover/closeout reviews, explicitly distinguish:
+- `entrypoint migrated`
+- `execution migrated`
+- `state/storage migrated`
+
+Do not treat operator CLI relocation or orchestration wrapping as full migration if runtime still executes in legacy/external codepaths.
 
 ## Output Contract
-- `Decision` (`PASS` or `FAIL`)
-- `Blocking Findings` (must-fix, ordered by severity)
+- `Review Mode`
+- `Execution Posture`
+- `Decision`
+- `Blocking Findings`
 - `Non-Blocking Findings`
+- `Current-State Assessment`
 - `Architecture Assessment`
-- `Migration Assessment` (if DB affected)
+- `Migration Assessment`
 - `Test Adequacy Assessment`
 - `Observability Assessment`
 - `Security Assessment`
+- `Public API Contract Assessment`
 - `UX/UI Critical Assessment`
 - `Spec Ambiguity Assessment`
 - `Date/Time Type Safety Assessment`
+- `Docs/Config/Runtime Drift Assessment`
 - `Required Fixes`
 - `Required Validation Commands`
 - `Residual Risks`
-- `Cursor Agent Error Entries` (one entry per significant Cursor-agent mistake)
-- `Skill Improvement Actions` (what to change in developer skills/rules to prevent recurrence)
+- `Cursor Agent Error Entries`
+- `Skill Improvement Actions`
 
 ## Severity Model
-- `S1`: production outage/data loss/security breach risk.
-- `S2`: likely functional defect or significant rework risk.
-- `S3`: maintainability/readability debt with low immediate risk.
+- `S1`: production outage, data loss, or security breach risk.
+- `S2`: likely functional defect or major rework risk.
+- `S3`: maintainability debt with low immediate risk.
 
 ## Decision Rules
 - `FAIL` if any `S1` remains unresolved.
-- `FAIL` if behavior is uncertain in a production-critical path.
-- `FAIL` if critical UX action is missing/broken/misdirected in actual user flow.
-- `FAIL` if next/queue happy path contains bypass controls that contradict minimal-flow spec.
-- `FAIL` if unresolved specification ambiguity can change behavior of critical path.
-- `FAIL` if migration rollback is missing for schema-affecting change.
-- `FAIL` if tests do not cover the changed behavior and key regressions.
-- `FAIL` if significant Cursor-agent mistakes are detected but not logged into project error register.
-- `PASS` only when no blocking issue remains and validation is reproducible.
+- `FAIL` if the current repository state is unsafe even when the reviewed microstep itself is partly correct.
+- `FAIL` if the review relies on future planned work to justify current breakage.
+- `FAIL` if the phase business goal, domain prerequisites, or operator-critical acceptance chain are not proven.
+- `FAIL` for migration/closeout claims if legacy/external runtime still performs active execution or writes for a contour claimed as migrated, frozen, or read-only.
+- `FAIL` if docs/config/runtime drift makes the operator path, deployment path, or repository understanding unsafe.
+- `FAIL` if public API contract changes lack same-change docs/spec/OpenAPI backsync.
+- `FAIL` if external write paths are validated only by mocks without gated live smoke or explicit operator replacement.
+- `FAIL` if known project error-register prevention actions are violated again.
+- `FAIL` if critical UX controls, rollback, tests, or specification clarity are insufficient.
+- `FAIL` if significant Cursor-agent mistakes were found but not logged.
+- `PASS` only when blocking issues are resolved and validation is reproducible.
 
 ## Quality Rules
-- Every finding must include:
-- file/path
-- why it matters in production
-- concrete fix direction
-- Keep focus on defects and risks, not style-only commentary.
-- Prefer evidence-based claims (tests, logs, code path reasoning).
-- Treat repeated Cursor-agent mistakes as process defects: always produce preventive skill/rule updates.
-- For next/queue reviews, always state explicitly which controls are allowed and confirm forbidden controls are absent.
+- Use Russian by default unless the user asked for another language.
+- Every finding must include: file/path, current-state risk, production impact, and concrete fix direction.
+- Keep the review defect-focused; avoid style-only commentary.
+- Prefer current-state evidence over roadmap intent.
+- Prefer one strong review artifact over bloated review paperwork.

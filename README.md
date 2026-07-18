@@ -53,28 +53,7 @@ VK_ACCESS_TOKEN=ваш_токен_доступа_vk_api
 VK_GROUP_ID=id_вашей_группы
 ```
 
-**Получение токена VK API:**
-
-⚠️ **ВАЖНО:** Для загрузки видео в группу нужен **пользовательский токен** с правами на группу, а не токен группы!
-
-**Способ 1: Пользовательский токен через приложение VK**
-1. Перейдите на https://vk.com/apps?act=manage
-2. Создайте новое приложение типа "Веб-сайт" или используйте существующее
-3. Получите токен доступа с правами:
-   - `video` - для загрузки видео
-   - `groups` - для публикации в группу
-4. Скопируйте токен в файл `.env` как `VK_ACCESS_TOKEN`
-
-**Способ 2: Токен через OAuth (рекомендуется)**
-1. Используйте официальный OAuth flow VK API
-2. Запросите права: `video`, `groups`
-3. Получите access_token пользователя
-4. Используйте этот токен для публикации в группу
-
-**Примечание:** Токены групп (полученные через настройки сообщества) имеют ограниченные права и не могут использовать метод загрузки видео напрямую.
-
-**Получение ID группы:**
-- ID группы можно найти в URL сообщества или в настройках сообщества
+**Важно:** для загрузки видео в группу нужен пользовательский токен с правами `video`/`groups`, а не токен группы. Подробный разбор способов получения токена, ID группы и автообновления — в [docs/QUICKSTART.md](docs/QUICKSTART.md) и [docs/VK-TOKEN-REFRESH.md](docs/VK-TOKEN-REFRESH.md).
 
 ### Конфигурационный файл (опционально)
 
@@ -141,6 +120,9 @@ python main.py upload-all --delay 10
 - `src/title_generators/` - Генераторы заголовков для видео
 - `src/models/` - Модели данных
 - `src/publisher/` - Публикация в VK Video
+- `src/adapters/` - Source/Destination адаптеры (унифицированный `ContentItem`, публикация через `VKDestinationAdapter`)
+- `src/storage/` - Очередь задач (`JobQueue` поверх SQLite)
+- `src/integrations/content_hub/` - канонический writepath: запись результата публикации в `content_hub.publication`/`link_map` только через `content_hub_client` (ContentBackbone), см. [TECH-SPEC-CURSOR-P0-VK-IMPORTER-CANONICAL-WRITEPATH-v1.md](docs/TECH-SPEC-CURSOR-P0-VK-IMPORTER-CANONICAL-WRITEPATH-v1.md) и [docs/CONTENT-HUB-RUNBOOK.md](docs/CONTENT-HUB-RUNBOOK.md)
 - `src/utils/` - Вспомогательные утилиты
 - `config/` - Конфигурационные файлы
 - `tests/` - Тесты
@@ -157,6 +139,7 @@ python main.py upload-all --delay 10
 - [Аудит пайплайнов и CLI](docs/AUDIT-PIPELINES-CLI.md) — полнота документации, логирование, коды выхода
 - [План внедрения](docs/PLAN.md) — этапы разработки
 - [Структура проекта](docs/PROJECT_STRUCTURE.md) — архитектура
+- [Устранение неполадок](docs/troubleshooting.md) — типовые ошибки VK API и canonical write
 
 ## Лицензия
 
